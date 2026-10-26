@@ -1,4 +1,4 @@
-# Bejeweled 3 (Xbox Live Arcade): code generation options for speed. Root keys: they must stay outside any table.
+# Feeding Frenzy (Xbox Live Arcade): code generation options for speed. Root keys: they must stay outside any table.
 #
 # bejeweled3-nx (2026-10-21): peggle1-nx's stage-1 set as it shipped in its 1.0.x (its comments kept below, they record
 # where each option was measured). Its share_registers marks were Peggle 1's functions and are not carried over; this

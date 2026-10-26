@@ -201,3 +201,14 @@ enough". The method is docs/optimising-functions.md.
   are not comparable (the game's scenes differ between runs; see the deterministic check above).
 - Delivered: the optimised NRO in `out/dist/dev_20261026_feedingfrenzy/feedingfrenzy-nx/`; ELF and map
   `out/nx/elf/feedingfrenzy_dev_opt_20261026.*`.
+
+## The toml headers (2026-10-26)
+
+The user: "fix the header on both feeding frenzy 1 and 2 if they need to be fixed". The headers copied from
+bejeweled3-nx still named Bejeweled 3: the player's file (`feedingfrenzy_switch.toml`, which the NRO writes next to
+itself at the first start), the code generator's manifest (with Bejeweled 3's title id 584111D6 and its default.xex
+facts), the built-in Switch settings and the speed options. Each now names Feeding Frenzy, the manifest with this
+game's default.xex (title 584107F1, entry 0x820AD418, image 0x00370000, XDK 2571, XeFeedingFrenzy.pe 0.0.1.1). The
+player's file also described the button layout wrongly ("A is the right button"); it now says what the driver does by
+default (by position: the bottom button acts as A), in Peggle 2's words. Comments only: the generated code is the same.
+- Delivered: the rebuilt optimised NRO (`a8f0706b...`: the same code, the new built-in files) in `out/dist/dev_20261026_feedingfrenzy/feedingfrenzy-nx/`; ELF and map `out/nx/elf/feedingfrenzy_dev_opt_hdr_20261026.*`. `tools/check_switch_build.py`: all checks passed. A player's existing feedingfrenzy.toml is kept: delete it to get the new one.

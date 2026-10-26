@@ -1,11 +1,12 @@
-# Bejeweled 3 for the Nintendo Switch: your options. This file is written next to the NRO at the first start when there is
-# none; edit it there. Everything else is built into the NRO.
+# Feeding Frenzy for the Nintendo Switch: your options. This file is written next to the NRO at the first start when
+# there is none; edit it there (delete it to get the defaults back). Everything else is built into the NRO.
 
 # The game's language: "" (the console's system language; English when the game does not have it), en, ja, de,
 # fr, es, it or pt.
 feedingfrenzy_language = ""
 
-# Controllers: the Xbox button layout (A and B as on an Xbox pad: A is the right button), and a single Joy-Con held
-# sideways.
+# Controllers: face buttons by position, as on the Xbox 360 pad the game was made for: the bottom button (B on Switch
+# controllers) is A, the right one (A) is B, the left one (Y) is X, the top one (X) is Y; false = by letter. And a
+# single Joy-Con held sideways.
 input_xbox_layout = true
 input_joycon_sideways = true
