@@ -66,7 +66,7 @@ using namespace renut::gpu;
 // bejeweled3-nx: Bejeweled 3's GetCurrentThreadId is sub_825F8690 (lwz r11,256(r13); lwz r3,332(r11); blr: the same 3
 // insns as N&B sub_822402A8, Peggle 2 sub_8260BF88 and Peggle 1 sub_824639B0; AcquireThreadOwnership sub_822FEFA8 and
 // the CreateDevice part sub_82311428 call it at the aligned positions).
-REX_IMPORT(__imp__sub_825F8690, GuestGetCurrentThreadId, u32());  // bejeweled3-nx: GetCurrentThreadId (N&B sub_822402A8)
+REX_IMPORT(__imp__sub_822A5FA0, GuestGetCurrentThreadId, u32());  // feedingfrenzy-nx: GetCurrentThreadId sub_822A5FA0 (the same 3 instructions; N&B sub_822402A8)
 REX_IMPORT(__imp__RtlInitializeCriticalSection, RtlInitializeCriticalSection, void(u32));
 REX_IMPORT(__imp__KeQueryPerformanceFrequency, KeQueryPerformanceFrequency, u32());
 REX_IMPORT(__imp__KeGetCurrentProcessType, KeGetCurrentProcessType, u32());
@@ -114,7 +114,9 @@ constexpr u32 kDeviceTypeNoHardware = 2;
 // ld r11,1952(r11); std r11,11008(r3)`, as Peggle 2's sub_826292C0 with 0x828E0370; N&B 0x82F39B38). It holds the
 // XDK build: 0x00020000511C4000, 0x511C = 20764 (Peggle 2 21256, Peggle 1 7776, N&B 7645).
 constexpr u32 kDeviceOffsetGlobalQword = 11008;
-constexpr u32 kGlobalQwordVa = 0x82AD07A0;
+// feedingfrenzy-nx (2026-10-26): 0x822F20D8 holds 0x000200000A0B4001 (XDK 2.0.2571; `lis r11,-32209;
+// ld r11,8408(r11)` in the CreateDevice path).
+constexpr u32 kGlobalQwordVa = 0x822F20D8;
 // Hardware-path fields: two critical sections, QueryPerformanceFrequency and
 // its reciprocal as floats, and 41 words set to -1.
 constexpr u32 kDeviceOffsetCriticalSection0 = 15332;
@@ -127,7 +129,8 @@ constexpr u32 kDeviceOffsetTitleMinusOne = 23776;
 // functions, aligned with Peggle 2's loads of 0x820008E0); in the image it holds 0xFFCAE000, the kernel's
 // VdGlobalDevice, as Peggle 2's does (0x82000614 holds 0xFFCAD000, VdGlobalXamDevice, for process type 2).
 // N&B 0x820007FC, Peggle 1 0x830B0CDC.
-constexpr u32 kVdGlobalDeviceImportSlot = 0x82000618;
+// feedingfrenzy-nx (2026-10-26): 0x82000574, the image's only word holding 0xFFCAE000.
+constexpr u32 kVdGlobalDeviceImportSlot = 0x82000574;
 
 constexpr u32 kE_OUTOFMEMORY = 0x8007000Eu;
 
@@ -1003,7 +1006,8 @@ constexpr u32 kDeviceOffsetOwnerThread = 0x2B08;
 // bejeweled3-nx: the constant D3DCAPS9 at 0x82001830: GetDeviceCaps sub_822FAAD0 `lis r11,-32256; addi r4,r11,6192;
 // li r5,304; b memcpy` (Peggle 2 0x8207AA80, Peggle 1 0x82070C28, N&B 0x82183B00); its 304 bytes are identical to
 // Peggle 2's and N&B's.
-constexpr u32 kDeviceCapsVa = 0x82001830;
+// feedingfrenzy-nx (2026-10-26): Direct3D_GetDeviceCaps (sub_820BCF28) copies its 304 bytes from 0x8200C8D0.
+constexpr u32 kDeviceCapsVa = 0x8200C8D0;
 constexpr u32 kDeviceCapsSize = 0x130;
 // Non-zero on a Fusion GPU. bejeweled3-nx: Bejeweled 3 does not link D3D_IsFusion (nor did Peggle 2), and in Peggle 1
 // nothing else reads the flag, so it has no Bejeweled 3 address; the IsFusion hook is in #if 0 and this (Peggle 1's
@@ -1307,36 +1311,36 @@ void SetFence(u32 device_va) {
 
 } // namespace renut::gpu::native
 
-BANJO_RENUT_HOOK(sub_822F8510, D3DDevice_InsertCallback_hook);  // D3DDevice_InsertCallback  // N&B sub_821FB688
-BANJO_RENUT_HOOK(sub_822FEEF8, D3DDevice_AddRef_hook);  // D3DDevice_AddRef  // N&B sub_8264E068
-BANJO_RENUT_HOOK(sub_822FEFA8, D3DDevice_AcquireThreadOwnership_hook);  // D3DDevice_AcquireThreadOwnership  // N&B sub_8264E0D8
-BANJO_RENUT_HOOK(sub_822FEFE8, D3DDevice_ReleaseThreadOwnership_hook);  // D3DDevice_ReleaseThreadOwnership  // N&B sub_8264E118
-BANJO_RENUT_HOOK(sub_822FAAD0, D3DDevice_GetDeviceCaps_hook);  // D3DDevice_GetDeviceCaps  // N&B sub_82658948
-BANJO_RENUT_HOOK(sub_822FAAE8, D3DDevice_GetDisplayMode_hook);  // D3DDevice_GetDisplayMode  // N&B sub_82658960
-BANJO_RENUT_HOOK(sub_822F6E78, D3DDevice_BlockOnFence_hook);  // D3DDevice_BlockOnFence  // N&B sub_8228F3B0
-BANJO_RENUT_HOOK(sub_822F59F0, D3D_SynchronizeToPresentationInterval_hook);  // D3D_SynchronizeToPresentationInterval  // N&B sub_8228A748
-BANJO_RENUT_HOOK(sub_822F90C8, D3DResource_GetDevice_hook);  // D3DResource_GetDevice  // N&B sub_82654D50
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_InsertCallback_hook);  // D3DDevice_InsertCallback  // N&B sub_821FB688
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_AddRef_hook);  // D3DDevice_AddRef  // N&B sub_8264E068
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_AcquireThreadOwnership_hook);  // D3DDevice_AcquireThreadOwnership  // N&B sub_8264E0D8
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_ReleaseThreadOwnership_hook);  // D3DDevice_ReleaseThreadOwnership  // N&B sub_8264E118
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_GetDeviceCaps_hook);  // D3DDevice_GetDeviceCaps  // N&B sub_82658948
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_GetDisplayMode_hook);  // D3DDevice_GetDisplayMode  // N&B sub_82658960
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_BlockOnFence_hook);  // D3DDevice_BlockOnFence  // N&B sub_8228F3B0
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3D_SynchronizeToPresentationInterval_hook);  // D3D_SynchronizeToPresentationInterval  // N&B sub_8228A748
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DResource_GetDevice_hook);  // D3DResource_GetDevice  // N&B sub_82654D50
 #if 0  // bejeweled3-nx: N&B sub_82B6BF60 (D3D_IsFusion) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82440C80, D3D_IsFusion_hook);  // D3D_IsFusion  // N&B sub_82B6BF60
 #endif
-BANJO_RENUT_HOOK(sub_822F2F10, D3DDevice_SetGammaRamp_hook);  // D3DDevice_SetGammaRamp  // N&B sub_8264D948
-BANJO_RENUT_HOOK(sub_822F2FE0, D3DDevice_SetPWLGamma_hook);  // D3DDevice_SetPWLGamma  // N&B sub_8264DA18
-BANJO_RENUT_HOOK(sub_822FF328, Direct3D_CreateDevice_hook);  // Direct3D_CreateDevice  // N&B sub_8264DF28
-BANJO_RENUT_HOOK(sub_822FEF20, D3DDevice_Release_hook);  // D3DDevice_Release  // N&B sub_8264E080
-BANJO_RENUT_HOOK(sub_823154E0, D3D_XenonGpu_Initialize_hook);  // D3D_XenonGpu_Initialize  // N&B sub_82663208
-BANJO_RENUT_HOOK(sub_82310D70, D3D_InitializeApiState_hook);  // D3D_InitializeApiState  // N&B sub_826597C8
-BANJO_RENUT_HOOK(sub_82311730, D3D_InitializePresentationParameters_hook);  // D3D_InitializePresentationParameters  // N&B sub_82659AA8
-BANJO_RENUT_HOOK(sub_82311568, D3D_CDevice_Uninitialize_hook);  // D3D_CDevice_Uninitialize  // N&B sub_8265A198
-BANJO_RENUT_HOOK(sub_822F81E8, KickOff_hook);  // D3D_CDevice_KickOff  // N&B sub_82210AB0
-BANJO_RENUT_HOOK(sub_822F7EA8, KickOffSegment_hook);  // D3D_CDevice_KickOffSegment  // N&B sub_822106C8
-BANJO_RENUT_HOOK(sub_822F8420, BeginRingBig_hook);  // D3D_CDevice_BeginRingBig  // N&B sub_821F7C18
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_SetGammaRamp_hook);  // D3DDevice_SetGammaRamp  // N&B sub_8264D948
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_SetPWLGamma_hook);  // D3DDevice_SetPWLGamma  // N&B sub_8264DA18
+BANJO_RENUT_HOOK(sub_820BF218, Direct3D_CreateDevice_hook);  // Direct3D_CreateDevice  // feedingfrenzy-nx: called once with (0, 1, 0, 0, &params, &0x82310EE0); fills the device
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_Release_hook);  // D3DDevice_Release  // N&B sub_8264E080
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3D_XenonGpu_Initialize_hook);  // D3D_XenonGpu_Initialize  // N&B sub_82663208
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3D_InitializeApiState_hook);  // D3D_InitializeApiState  // N&B sub_826597C8
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3D_InitializePresentationParameters_hook);  // D3D_InitializePresentationParameters  // N&B sub_82659AA8
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3D_CDevice_Uninitialize_hook);  // D3D_CDevice_Uninitialize  // N&B sub_8265A198
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, KickOff_hook);  // D3D_CDevice_KickOff  // N&B sub_82210AB0
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, KickOffSegment_hook);  // D3D_CDevice_KickOffSegment  // N&B sub_822106C8
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, BeginRingBig_hook);  // D3D_CDevice_BeginRingBig  // N&B sub_821F7C18
 #if 0  // peggle2-nx / peggle1-nx / bejeweled3-nx: N&B sub_82A11158 (D3D_CDevice_BeginRingManual) is linked in none of Peggle 2, Peggle 1 and Bejeweled 3
 BANJO_RENUT_HOOK(sub_82A11158, BeginRingManual_hook);  // D3D_CDevice_BeginRingManual
 #endif
-BANJO_RENUT_HOOK(sub_822F6B78, RingBufferDeviceAllocate_hook);  // D3D_RingBufferDeviceAllocate  // N&B sub_8222D3E0
-BANJO_RENUT_HOOK(sub_822F7020, AllocateInlineData_hook);  // D3D_CDevice_AllocateInlineData  // N&B sub_8222D240
-BANJO_RENUT_HOOK(sub_822F8568, D3DDevice_SetRingBufferParameters_hook);  // D3DDevice_SetRingBufferParameters  // N&B sub_82657508
-BANJO_RENUT_HOOK_SHARED(sub_822F5EB0, D3DDevice_Swap_hook);  // D3DDevice_Swap  // N&B sub_82287590
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, RingBufferDeviceAllocate_hook);  // D3D_RingBufferDeviceAllocate  // N&B sub_8222D3E0
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, AllocateInlineData_hook);  // D3D_CDevice_AllocateInlineData  // N&B sub_8222D240
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_SetRingBufferParameters_hook);  // D3DDevice_SetRingBufferParameters  // N&B sub_82657508
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK_SHARED(sub_XXXXXXXX, D3DDevice_Swap_hook);  // D3DDevice_Swap  // N&B sub_82287590
 #if 0  // bejeweled3-nx: N&B sub_82657CB0 (D3DDevice_BeginCommandBuffer) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82445BF0, D3DDevice_BeginCommandBuffer_hook);  // D3DDevice_BeginCommandBuffer  // N&B sub_82657CB0
 #endif
@@ -1346,6 +1350,6 @@ BANJO_RENUT_HOOK(sub_824488D8, D3DDevice_EndCommandBuffer_hook);  // D3DDevice_E
 #if 0  // bejeweled3-nx: N&B sub_82222888 (D3DDevice_RunCommandBuffer) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82448CB0, D3DDevice_RunCommandBuffer_hook);  // D3DDevice_RunCommandBuffer  // N&B sub_82222888
 #endif
-BANJO_RENUT_HOOK(sub_822F6DA8, BlockOnFence_hook);  // D3D_CDevice_BlockOnFence  // N&B sub_8228F558
-BANJO_RENUT_HOOK(sub_822FEBA0, CBlocker_Check_hook);  // D3D_CBlocker_Check  // N&B sub_8264DCD0
-BANJO_RENUT_HOOK(sub_822F8328, IsFencePending_hook);  // D3DDevice_IsFencePending  // N&B sub_8228F650
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, BlockOnFence_hook);  // D3D_CDevice_BlockOnFence  // N&B sub_8228F558
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, CBlocker_Check_hook);  // D3D_CBlocker_Check  // N&B sub_8264DCD0
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, IsFencePending_hook);  // D3DDevice_IsFencePending  // N&B sub_8228F650

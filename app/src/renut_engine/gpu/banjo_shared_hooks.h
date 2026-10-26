@@ -7,4 +7,4 @@
 
 #include <rex/ppc.h>
 
-extern "C" void renut_native_sub_822F5EB0(PPCContext& ctx, uint8_t* base);
+extern "C" void renut_native_sub_820B17B0(PPCContext& ctx, uint8_t* base);  // D3DDevice_Present (feedingfrenzy-nx)

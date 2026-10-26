@@ -1,4 +1,5 @@
 #include "shader.h"
+#include "container_0e.h"
 #include "shader_recompiler.h"
 #include "dxc_compiler.h"
 #ifdef RENUT_RECOMP
@@ -134,6 +135,36 @@ int main(int argc, char** argv)
             {
                 auto shaderContainer = reinterpret_cast<const ShaderContainer*>(fileData.get() + i);
                 size_t dataSize = shaderContainer->virtualSize + shaderContainer->physicalSize;
+
+                // feedingfrenzy-nx (2026-10-26): a version 0x0E container (XDK 2571) is keyed by its own hash and
+                // translated from its 0x11 form (container_0e.h).
+                if (container_0e::IsContainer0E(fileData.get() + i, fileSize - i))
+                {
+                    const uint8_t* original = fileData.get() + i;
+                    const size_t originalSize = size_t(container_0e::Rd(original, 4)) + container_0e::Rd(original, 8);
+                    XXH64_hash_t hash = XXH3_64bits(original, originalSize);
+                    auto shader = shaders.try_emplace(hash);
+                    if (shader.second)
+                    {
+                        std::vector<uint8_t> converted = container_0e::Convert(original);
+                        auto copy = std::make_unique<uint8_t[]>(converted.size());
+                        std::memcpy(copy.get(), converted.data(), converted.size());
+                        shader.first->second.data = copy.get();
+                        files.emplace_back(std::move(copy));
+#ifdef RENUT_RECOMP
+                        std::string stem = file.path().stem().string();
+                        if (containerIndex > 0)
+                            stem += fmt::format(".{}", containerIndex);
+                        shader.first->second.sourceName = std::move(stem);
+#endif
+                        foundAny = true;
+                    }
+#ifdef RENUT_RECOMP
+                    ++containerIndex;
+#endif
+                    i += originalSize;
+                    continue;
+                }
 
                 if ((shaderContainer->flags & 0xFFFFFF00) == 0x102A1100 &&
                     dataSize <= (fileSize - i) &&

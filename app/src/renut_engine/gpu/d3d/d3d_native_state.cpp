@@ -729,13 +729,45 @@ constexpr SamplerStateFn kSamplerStateFns[kSamplerStates] = {
 // N&B's state tables: {getter, setter, default} per state.
 // bejeweled3-nx: Bejeweled 3's tables, found by N&B's 101 / 20 default values (stride 12; the only match each), loaded
 // only by D3D_InitializeApiState sub_82310D70. Peggle 2 0x828DFDB8 / 0x828E0278, Peggle 1 0x82F85848 / 0x82F85D08.
-constexpr u32 kRenderStateTable = 0x82AD01E8;  // bejeweled3-nx: N&B 0x82E506F0
-constexpr u32 kSamplerStateTable = 0x82AD06A8;  // bejeweled3-nx: N&B 0x82E50BD0
+// feedingfrenzy-nx (2026-10-26): XDK 2571's D3D_InitializeApiState does not have N&B's 101 / 20 entries in N&B's
+// order, and only the defaults (field 2) matter here (the game calls each state function directly; nothing reads
+// the device's getter / setter tables). The defaults are Bejeweled 3's tables' (0x82AD01E8 / 0x82AD06A8, the
+// order of kRenderStateFns / kSamplerStateFns), copied here; getter and setter words are 0.
+constexpr u32 kRenderStateTable = 0;
+constexpr u32 kSamplerStateTable = 0;
+constexpr u32 kRenderStateDefaults[101] = {
+    0x00000000u, 0x00000003u, 0x00000001u, 0x00000000u, 0x00000000u, 0x00000000u, 0x3F800000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000001u, 0x00000003u, 0x00000001u, 0x00000000u, 0x00000006u, 0x00000000u,
+    0x00000000u, 0xFFFFFFFFu, 0x00000001u, 0x00000000u, 0x00000000u, 0x00000001u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000007u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x00000007u, 0x00000000u, 0xFFFFFFFFu, 0xFFFFFFFFu, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000007u,
+    0x00000000u, 0xFFFFFFFFu, 0xFFFFFFFFu, 0x00000000u, 0x3F800000u, 0x3F800000u, 0x00000000u, 0x42800000u,
+    0x00000001u, 0xFFFFFFFFu, 0x00000000u, 0x00000000u, 0x00000000u, 0x0000000Fu, 0x0000000Fu, 0x0000000Fu,
+    0x0000000Fu, 0x00000001u, 0x3F800000u, 0x3F800000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000001u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000000u, 0x0000FFFFu, 0x00000000u, 0x00000087u, 0x40000000u, 0x40000000u,
+    0x3F800000u, 0x3F800000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x00000002u, 0x00000002u, 0x00000001u, 0x3F800000u, 0x00000001u,
+};
+constexpr u32 kSamplerStateDefaults[20] = {
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u, 0x00000002u, 0x00000000u,
+    0x00000000u, 0x00000001u, 0x00000000u, 0x00000000u, 0x00000000u, 0x0000000Du, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000001u,
+};
 constexpr u32 kTextureSamplers = 26;
 
 u32 TableWord(u32 table, u32 index, u32 field) {
+  if (!table)  // feedingfrenzy-nx: no guest table (getter / setter words 0; defaults below)
+    return 0;
   const auto *p = GuestPtr<const be_u32>(table + index * 12 + field * 4);
   return p ? u32(*p) : 0;
+}
+u32 RenderStateDefault(u32 index) {
+  return index < 101 ? kRenderStateDefaults[index] : 0;
+}
+u32 SamplerStateDefault(u32 index) {
+  return index < 20 ? kSamplerStateDefaults[index] : 0;
 }
 
 }  // namespace
@@ -888,13 +920,13 @@ void InitializeStateTables(Device device) {
   for (u32 i = 0; i < kRenderStates; ++i) {
     device.SetW(off::SetRenderStateCall + i * 4, TableWord(kRenderStateTable, i, 1));
     device.SetW(off::GetRenderStateCall + i * 4, TableWord(kRenderStateTable, i, 0));
-    kRenderStateFns[i](device, TableWord(kRenderStateTable, i, 2));
+    kRenderStateFns[i](device, RenderStateDefault(i));
   }
   for (u32 sampler = 0; sampler < kTextureSamplers; ++sampler) {
     for (u32 i = 0; i < kSamplerStates; ++i) {
       device.SetW(off::SetSamplerStateCall + i * 4, TableWord(kSamplerStateTable, i, 1));
       device.SetW(off::GetSamplerStateCall + i * 4, TableWord(kSamplerStateTable, i, 0));
-      kSamplerStateFns[i](device, sampler, TableWord(kSamplerStateTable, i, 2));
+      kSamplerStateFns[i](device, sampler, SamplerStateDefault(i));
     }
     SetTexture(device, sampler, 0);
   }
@@ -1371,7 +1403,7 @@ namespace {
 // depth format (word_820052F8).
 // bejeweled3-nx: 0x82001620 (GetLevelLayout sub_823018B0, GetSubresourceLayout, Lock2DSurface, FindTextureSize, ...:
 // `lis r11,-32256; addi r11,r11,5664`, 7 aligned uses where Peggle 2 has 0x8207A590); 128 bytes identical to N&B's.
-constexpr u32 kFormatTable = 0x82001620;  // bejeweled3-nx: N&B 0x820052F8, Peggle 1 0x8206FBB8
+constexpr u32 kFormatTable = 0x8200C670;  // feedingfrenzy-nx: the same 128 bytes as Bejeweled 3's 0x82001620 (N&B 0x820052F8)
 // The register packets between RB_COPY_CONTROL and RB_COPY_DEST_INFO.
 constexpr u32 kCopyControl = 0x2A18;
 constexpr u32 kCopyDestInfo = 0x2A24;
@@ -1620,8 +1652,8 @@ constexpr u32 kExportFlags = 0x3648;
 // N&B's switches for the two GPU workarounds below (dword_82FAD204/208).
 // bejeweled3-nx: DoBeginExportNanVertex sub_822F92C8 reads [0x82B103B0] (`lis r11,-32079; lwz r11,944(r11)`) where
 // Peggle 2's sub_82616D78 reads 0x82D75090; DoEndExport512Pixels sub_822F9420 reads [0x82B103B4] (Peggle 2 0x82D75094).
-constexpr u32 kSkipExportNanVertex = 0x82B103B0;  // bejeweled3-nx: N&B 0x82FAD204, Peggle 1 0x83024420
-constexpr u32 kSkipExport512Pixels = 0x82B103B4;  // bejeweled3-nx: N&B 0x82FAD208, Peggle 1 0x83024424
+constexpr u32 kSkipExportNanVertex = 0;  // feedingfrenzy-nx: not in XDK 2571 (no export)
+constexpr u32 kSkipExport512Pixels = 0;  // feedingfrenzy-nx: not in XDK 2571 (no export)
 
 u32 GuestWord(u32 va) {
   const auto *p = GuestPtr<const be_u32>(va);
@@ -1631,7 +1663,7 @@ u32 GuestWord(u32 va) {
 // DoBeginExportNanVertex (0x82654FD8): a draw of one NaN vertex, from its own
 // shaders and state.
 void ExportNanVertex(Device d) {
-  if (GuestWord(kSkipExportNanVertex))
+  if (kSkipExportNanVertex && GuestWord(kSkipExportNanVertex))
     return;
   d.Dirty(kPendingStates, 0x80000 | Bit(41) | Bit(40) | Bit(39) | 8);
 }
@@ -1639,7 +1671,7 @@ void ExportNanVertex(Device d) {
 // DoEndExport512Pixels (0x82655130): a 512-pixel draw, from its own shaders
 // and state.
 void Export512Pixels(Device d) {
-  if (GuestWord(kSkipExport512Pixels))
+  if (kSkipExport512Pixels && GuestWord(kSkipExport512Pixels))
     return;
   d.Dirty(kPendingStates, Bit(41) | Bit(40) | Bit(39));
   d.Dirty(kPendingFetch, Bit(35));

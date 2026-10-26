@@ -32,7 +32,6 @@
 #include "feedingfrenzy_language.h"
 #include "feedingfrenzy_pc_profiler.h"
 #include "feedingfrenzy_pgo.h"
-#include "feedingfrenzy_touch.h"
 
 #if defined(FEEDINGFRENZY_BUILTIN_CONFIG)
 #include "feedingfrenzy_builtin_config.h"  // generated from app/feedingfrenzy_switch_defaults.toml and feedingfrenzy_switch.toml (CMake)
@@ -255,22 +254,6 @@ class FeedingFrenzyApp : public rex::ReXApp {
     return rex::ReXApp::OnFinalizePaths(defaults, std::move(resume));
   }
 #endif
-
-  // The PC: the left mouse button and the pointer are the game's touches (feedingfrenzy_touch; the Switch reads its touch
-  // screen itself).
-  void OnMouseDown(rex::ui::MouseEvent& e) override {
-    if (e.button() == rex::ui::MouseEvent::Button::kLeft) ForwardMouse(feedingfrenzy::touch::MouseKind::kDown, e);
-  }
-  void OnMouseMove(rex::ui::MouseEvent& e) override { ForwardMouse(feedingfrenzy::touch::MouseKind::kMove, e); }
-  void OnMouseUp(rex::ui::MouseEvent& e) override {
-    if (e.button() == rex::ui::MouseEvent::Button::kLeft) ForwardMouse(feedingfrenzy::touch::MouseKind::kUp, e);
-  }
-  void ForwardMouse(feedingfrenzy::touch::MouseKind kind, const rex::ui::MouseEvent& e) {
-    const auto* w = window();
-    if (!w || !w->GetActualPhysicalWidth() || !w->GetActualPhysicalHeight()) return;
-    feedingfrenzy::touch::OnWindowMouse(kind, float(e.x()) / float(w->GetActualPhysicalWidth()),
-                                     float(e.y()) / float(w->GetActualPhysicalHeight()));
-  }
 
   void OnShutdown() override {
 #if FEEDINGFRENZY_RENUT_RENDERER

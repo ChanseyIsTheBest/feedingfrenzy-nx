@@ -373,14 +373,12 @@ void Check(Hook& h, PPCContext& ctx, uint8_t* base) {
 // non-volatile registers, as assembly routines leave their scratch registers undefined), then the localized copies
 // (tools/localize_native.py --list app/src/cpu/hot/localized.txt writes their hook lines).
 
-// C runtime: byte for byte SA2's and Peggle 2's routines (tools/p2_function_matches.py, 2026-10-21: Bejeweled 3's
-// memcpy at 0x825DF500 is Peggle 2's 0x825F0AE0, its memset at 0x825DEDD0 Peggle 2's 0x825F10B0, both exact; sa2-nx
-// verified them: 115-133 M calls, 0 differences). The natives keep Peggle 2's names (n_825F0AE0.h, n_825F10B0.h); the
-// size and FNV-1a 64 of the guest code are the same, so the code check passes at Bejeweled 3's addresses.
-FEEDINGFRENZY_HOT_HOOK(825DF500, feedingfrenzy_cpu_native_memcpy, "Native CRT memcpy (sub_825DF500): host memcpy/memmove",
-                 feedingfrenzy::hot::n_825F0AE0, &feedingfrenzy::hot::n_825F0AE0::Writes, feedingfrenzy::hot::Cmp::kReturn, 1160,
-                 0xEE0EAEB1E0584297ull)
-FEEDINGFRENZY_HOT_HOOK(825DEDD0, feedingfrenzy_cpu_native_memset, "Native CRT memset (sub_825DEDD0): host memset",
+// C runtime (feedingfrenzy-nx, 2026-10-26; tools/crt_signatures.py scan and tools/guest_code_hash.py):
+//   memset at 0x822CCC40 is byte for byte Peggle 2's 0x825F10B0 (160 bytes, FNV-1a 64 0x54D201DC8A21DABA, the code
+//   check of n_825F10B0.h), so its native applies here;
+//   memcpy at 0x822CD480 is another version (1056 bytes; Peggle 2's is 1160): n_825F0AE0.h does not apply and the game's
+//   own runs.
+FEEDINGFRENZY_HOT_HOOK(822CCC40, feedingfrenzy_cpu_native_memset, "Native CRT memset (sub_822CCC40): host memset",
                  feedingfrenzy::hot::n_825F10B0, &feedingfrenzy::hot::n_825F10B0::Writes, feedingfrenzy::hot::Cmp::kReturn, 160,
                  0x54D201DC8A21DABAull)
 

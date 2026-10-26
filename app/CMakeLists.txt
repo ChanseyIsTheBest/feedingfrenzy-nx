@@ -90,8 +90,6 @@ set(FEEDINGFRENZY_SOURCES
     src/feedingfrenzy_dlc.cpp
     src/feedingfrenzy_language.cpp
     # Touch controls: the Switch's touch screen and the PC's mouse as the game's own touches (SexyTouch).
-    src/feedingfrenzy_touch.cpp
-    src/feedingfrenzy_quest_menu.cpp
     # Native replacements of hot guest functions (feedingfrenzy_cpu_native_*, from sa2-nx through peggle2-nx): the CRT
     # memcpy / memset by hand (src/cpu/hot), and the localized copies of src/cpu/hot/localized.txt in generated/hot/
     # (tools/localize_native.py, run by tools/post_codegen.py). peggle1-nx, 2026-10-21: batch 1, the 30 hottest.
@@ -143,6 +141,11 @@ if(FEEDINGFRENZY_NATIVE_RENDERER)
 endif()
 
 if(WIN32)
+    # feedingfrenzy-nx (2026-10-26): the Direct3D call trace, a PC test aid for mapping Renut's hooks (off by default).
+    # It hooks the same functions as Renut's renderer, so only builds without it.
+    if(NOT FEEDINGFRENZY_RENUT_RENDERER)
+        list(APPEND FEEDINGFRENZY_SOURCES src/feedingfrenzy_d3d_trace.cpp)
+    endif()
     add_executable(feedingfrenzy WIN32 ${FEEDINGFRENZY_SOURCES})
 else()
     add_executable(feedingfrenzy ${FEEDINGFRENZY_SOURCES})
@@ -157,7 +160,7 @@ target_include_directories(feedingfrenzy PRIVATE src)
 # peggle2-nx (2026-10-20, from banjo-nx): Ryujinx starts NROs without argv[0]; the SDK then takes the NRO's usual place
 # on the SD (sdk/src/core/filesystem_posix.cpp). A console's hbloader always passes the path, so nothing changes there.
 if(REXGLUE_PLATFORM_SWITCH AND TARGET rexcore)
-    target_compile_definitions(rexcore PRIVATE REX_SWITCH_FALLBACK_EXE="/switch/bejeweled3-nx/feedingfrenzy.nro")
+    target_compile_definitions(rexcore PRIVATE REX_SWITCH_FALLBACK_EXE="/switch/feedingfrenzy-nx/feedingfrenzy.nro")
 endif()
 option(FEEDINGFRENZY_RENUT_RENDERER "Build Renut's Direct3D-level renderer (src/renut_engine/gpu)" ON)
 if(FEEDINGFRENZY_RENUT_RENDERER)

@@ -49,7 +49,7 @@ using namespace renut::gpu;
 // bejeweled3-nx: Bejeweled 3's XMemFree is sub_825F8670, the XDK default (6 insns, the same as Peggle 2's
 // sub_823189E8: physical -> XPhysicalFree, else the heap); CreateDevice, Release, CDevice_Uninitialize, ... call it
 // at the aligned positions (Peggle 1 sub_82463228: 12 aligned call sites).
-REX_IMPORT(__imp__sub_825F8670, GameXMemFree, void(u32, u32));  // bejeweled3-nx: XMemFree (N&B sub_822399D8)
+REX_IMPORT(__imp__sub_820AD808, GameXMemFree, void(u32, u32));  // feedingfrenzy-nx: XMemFree sub_820AD808 (Bejeweled 3's with other branch targets; N&B sub_822399D8)
 // The kernel's physical memory, as XPhysicalAlloc / XPhysicalFree use it.
 REX_IMPORT(__imp__MmAllocatePhysicalMemoryEx, MmAllocatePhysicalMemoryEx,
            u32(u32, u32, u32, u32, u32, u32));
@@ -99,7 +99,8 @@ void FreeHeader(u32 va) {
 // bejeweled3-nx: Bejeweled 3's XPhysicalAlloc is sub_822EB7E8 (the shape of Peggle 2's sub_823198D8), which reads
 // [0x82B10380] (`lis r11,-32079; lwz r11,896(r11)`) where Peggle 2's reads 0x82906EB4; XPhysicalAllocEx sub_822EB870
 // reads it too. N&B 0x82F39E34, Peggle 1 0x83029CD8.
-constexpr u32 kGameNoLargePagesVa = 0x82B10380;  // bejeweled3-nx. XPhysicalAlloc drops MEM_LARGE_PAGES while set
+// feedingfrenzy-nx (2026-10-26): Bejeweled 3's game flag; Feeding Frenzy has none (0 = not read).
+constexpr u32 kGameNoLargePagesVa = 0;
 
 u32 AllocPhysical(u32 size, u32 attributes) {
   static constexpr u32 kAlignment[16] = {4,    4,    4,     8,     16,    32,     64,     128,
@@ -108,7 +109,8 @@ u32 AllocPhysical(u32 size, u32 attributes) {
   if (!size)
     return 0;
   u32 protect = kProtect[(attributes >> 28) & 3];
-  if (const auto *no_large_pages = GuestPtr<const be_u32>(kGameNoLargePagesVa); u32(*no_large_pages))
+  if (const auto *no_large_pages = kGameNoLargePagesVa ? GuestPtr<const be_u32>(kGameNoLargePagesVa) : nullptr;
+      no_large_pages && u32(*no_large_pages))
     protect &= ~0x20000000u;
   const u32 va = MmAllocatePhysicalMemoryEx(0, size, protect, 0, ~0u, kAlignment[(attributes >> 24) & 0xF]);
   if (!va)
@@ -124,7 +126,7 @@ void FreePhysical(u32 va) {
 
 // The GPU format table (word_820052F8): per D3D format low 6 bits, bits per
 // pixel in the low byte, flags in the high one.
-constexpr u32 kFormatTable = 0x82001620;  // bejeweled3-nx: N&B 0x820052F8 (see d3d_native_state.cpp)
+constexpr u32 kFormatTable = 0x8200C670;  // feedingfrenzy-nx (see d3d_native_state.cpp)
 
 u16 FormatTableEntry(u32 format) {
   const auto *table = GuestPtr<const be_u16>(kFormatTable);
@@ -138,7 +140,9 @@ u32 FormatBitsPerPixel(u32 format) {
 // The word at 0x82B113E0 (N&B 0x82FA36C8): set while a depth surface owns the HiZ memory.
 // bejeweled3-nx: CreateSurface sub_82302A90, Resource_Destroy sub_822F9B08 and the surface-header helper sub_823026C8
 // use [0x82B113E0] where Peggle 2's use 0x82D7509C (4 aligned accesses). Peggle 1 0x83024404.
-constexpr u32 kHiZOwnerVa = 0x82B113E0;
+// feedingfrenzy-nx (2026-10-26): only Renut reads and writes it while Direct3D's entry points are hooked (nothing
+// else of Direct3D runs), so it is a variable of the renderer's own here.
+u32 g_hiz_owner = 0;
 
 u32 LoadU32(u32 va) {
   const auto *p = GuestPtr<const be_u32>(va);
@@ -328,7 +332,7 @@ void SetSurfaceHeader(u32 width, u32 height, u32 format, u32 multisample, u32 pa
     base = parameters[0];
     hiz_base = i32(u32(parameters[1]));
     color_exp_bias = parameters[2];
-  } else if (depth && !LoadU32(kHiZOwnerVa)) {
+  } else if (depth && !g_hiz_owner) {
     hiz_base = 0;
   }
   u32 pitch_tiles, pitch;
@@ -398,8 +402,8 @@ u32 CreateSurface(u32 width, u32 height, u32 format, u32 multisample, u32 parame
     }
     s[0] = u32(s[0]) | 0x80000000u;  // owns its EDRAM
     s[7] = Insert(s[7], u32(base), 0, 12);
-    if (depth && !LoadU32(kHiZOwnerVa)) {
-      StoreU32(kHiZOwnerVa, 1);
+    if (depth && !g_hiz_owner) {
+      g_hiz_owner = 1;
       s[8] = u32(s[8]) & 0x1FFFF;
     }
   }
@@ -695,6 +699,14 @@ u32 D3DVertexBuffer_Lock_hook(u32 buffer, u32 /*offset*/, u32 /*size*/, u32 flag
   return LockResource(buffer, 0, base, 0, base, LoadU32(buffer + 0x1C) & 0x3FFFFFC, flags);
 }
 
+// feedingfrenzy-nx (2026-10-26): XDK 2571's D3DVertexBuffer_Lock (sub_820BCEB8) returns the locked range itself:
+// base + OffsetToLock (`add r8, base, offset` before its lock), where N&B's returns the base and its header adds the
+// offset. Feeding Frenzy writes each sprite's four vertices at the returned address.
+u32 FeedingFrenzyVertexBufferLock(u32 buffer, u32 offset, u32 size, u32 flags) {
+  const u32 base = D3DVertexBuffer_Lock_hook(buffer, offset, size, flags);
+  return base ? base + offset : 0;
+}
+
 // void *D3DIndexBuffer_Lock(D3DIndexBuffer*, UINT OffsetToLock, UINT SizeToLock,
 //     DWORD Flags) [0x82654F90]
 u32 D3DIndexBuffer_Lock_hook(u32 buffer, u32 /*offset*/, u32 /*size*/, u32 flags) {
@@ -864,7 +876,7 @@ void DestroyGuestResource(u32 resource) {
       if (common & 0x80000000u)
         FreeEdram(u32(r[7]) & 0xFFF, u32(r[11]) / 0x1400);
       if (u32(r[8]) & 1)
-        StoreU32(kHiZOwnerVa, 0);
+        g_hiz_owner = 0;
     }
     break;
   case 6:  // vertex shader: its physical part
@@ -923,7 +935,7 @@ void D3DResource_Destroy_hook(u32 resource) {
       if (common & 0x80000000u)
         FreeEdram(u32(s[7]) & 0xFFF, u32(s[11]) / 0x1400);
       if (u32(s[8]) & 1)
-        StoreU32(kHiZOwnerVa, 0);
+        g_hiz_owner = 0;
       render_thread::Queue([resource] { ReleaseHostSurfaceLocked(resource); });
       render_thread::QueueUnlocked([surface] { DestroyRecord(surface); });
     }
@@ -1695,25 +1707,23 @@ u32 CreateTexture(u32 width, u32 height, u32 depth, u32 levels, u32 usage, u32 f
 
 } // namespace renut::gpu::native
 
-BANJO_RENUT_HOOK(sub_82302A90, D3DDevice_CreateSurface_hook);  // D3DDevice_CreateSurface  // N&B sub_82655FE8
-BANJO_RENUT_HOOK(sub_822F9B08, D3DResource_Destroy_hook);  // D3DResource_Destroy  // N&B sub_822084F0
-BANJO_RENUT_HOOK(sub_822F8DE8, D3D_UnlockResource_hook);  // D3D_UnlockResource  // N&B sub_82654C28
-BANJO_RENUT_HOOK(sub_822F91F8, D3DVertexBuffer_Unlock_hook);  // D3DVertexBuffer_Unlock  // N&B sub_82654ED0
-#if 0  // bejeweled3-nx: N&B sub_826561E0 (D3DSurface_UnlockRect) is not linked in Bejeweled 3
-BANJO_RENUT_HOOK(sub_82426548, D3DSurface_UnlockRect_hook);  // D3DSurface_UnlockRect  // N&B sub_826561E0
-#endif
-BANJO_RENUT_HOOK(sub_822F9FA0, LockResource_hook);  // D3D_LockResource  // N&B sub_82654968
-BANJO_RENUT_HOOK(sub_822FA310, D3DVertexBuffer_Lock_hook);  // D3DVertexBuffer_Lock  // N&B sub_82654E80
-BANJO_RENUT_HOOK(sub_822FA360, D3DIndexBuffer_Lock_hook);  // D3DIndexBuffer_Lock  // N&B sub_82654F90
-BANJO_RENUT_HOOK(sub_82302268, D3D_LockSurface_hook);  // D3D_LockSurface  // N&B sub_82655838
-BANJO_RENUT_HOOK(sub_82302340, D3D_Lock2DSurface_hook);  // D3D_Lock2DSurface  // N&B sub_82655908
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_CreateSurface_hook);  // D3DDevice_CreateSurface  // N&B sub_82655FE8
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DResource_Destroy_hook);  // D3DResource_Destroy  // N&B sub_822084F0
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3D_UnlockResource_hook);  // D3D_UnlockResource  // N&B sub_82654C28
+BANJO_RENUT_HOOK(sub_820BCF18, D3DVertexBuffer_Unlock_hook);  // D3DVertexBuffer_Unlock  // feedingfrenzy-nx: (vb) after each sprite's vertices
+BANJO_RENUT_HOOK(sub_820B2588, D3DSurface_UnlockRect_hook);  // D3DSurface_UnlockRect  // feedingfrenzy-nx: the texture unlock through the surface's texture (+20); one game call site
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, LockResource_hook);  // D3D_LockResource  // N&B sub_82654968
+BANJO_RENUT_HOOK(sub_820BCEB8, FeedingFrenzyVertexBufferLock);  // D3DVertexBuffer_Lock  // feedingfrenzy-nx: returns base + offset (adapter)
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DIndexBuffer_Lock_hook);  // D3DIndexBuffer_Lock  // N&B sub_82654F90
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3D_LockSurface_hook);  // D3D_LockSurface  // N&B sub_82655838
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3D_Lock2DSurface_hook);  // D3D_Lock2DSurface  // N&B sub_82655908
 #if 0  // bejeweled3-nx: N&B sub_826559A0 (D3D_Lock3DSurface) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82427F40, D3D_Lock3DSurface_hook);  // D3D_Lock3DSurface  // N&B sub_826559A0
 #endif
 #if 0  // bejeweled3-nx: N&B sub_82655DB0 (D3DArrayTexture_LockRect) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82428BF0, D3DArrayTexture_LockRect_hook);  // D3DArrayTexture_LockRect  // N&B sub_82655DB0
 #endif
-BANJO_RENUT_HOOK(sub_82302950, D3DLineTexture_LockRect_hook);  // D3DLineTexture_LockRect  // N&B sub_82655EA8
+BANJO_RENUT_HOOK(sub_820B3D58, D3DLineTexture_LockRect_hook);  // D3DLineTexture_LockRect  // feedingfrenzy-nx: LockRect (texture, level, locked, rect, flags) -> 820B3778
 #if 0  // bejeweled3-nx: N&B sub_82656150 (D3DSurface_LockRect) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_824290C0, D3DSurface_LockRect_hook);  // D3DSurface_LockRect  // N&B sub_82656150
 #endif
@@ -1723,31 +1733,31 @@ BANJO_RENUT_HOOK(sub_82429150, D3DVolume_LockBox_hook);  // D3DVolume_LockBox  /
 #if 0  // bejeweled3-nx: N&B sub_82655EA0 (D3D_Lock3DSurface_Thunk) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82428CD0, D3D_Lock3DSurface_hook);  // D3D_Lock3DSurface_Thunk  // N&B sub_82655EA0
 #endif
-BANJO_RENUT_HOOK(sub_822F9050, D3DResource_AddRef_hook);  // D3DResource_AddRef  // N&B sub_822088B0
-BANJO_RENUT_HOOK(sub_822F9DB0, D3DResource_Release_hook);  // D3DResource_Release  // N&B sub_82208720
-BANJO_RENUT_HOOK(sub_822F8D58, D3DResource_GetType_hook);  // D3DResource_GetType  // N&B sub_82208110
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DResource_AddRef_hook);  // D3DResource_AddRef  // N&B sub_822088B0
+BANJO_RENUT_HOOK(sub_820BCD90, D3DResource_Release_hook);  // D3DResource_Release  // feedingfrenzy-nx: decrements Common, destroys at 0
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DResource_GetType_hook);  // D3DResource_GetType  // N&B sub_82208110
 #if 0  // bejeweled3-nx: N&B sub_822082A0 (D3DSurface_GetDesc) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82429028, D3DSurface_GetDesc_hook);  // D3DSurface_GetDesc  // N&B sub_822082A0
 #endif
 #if 0  // bejeweled3-nx: N&B sub_82656178 (D3DVolume_GetDesc) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82429108, D3DVolume_GetDesc_hook);  // D3DVolume_GetDesc  // N&B sub_82656178
 #endif
-BANJO_RENUT_HOOK(sub_82301C80, Get2DSurfaceDesc);  // D3D_Get2DSurfaceDesc  // N&B sub_822081A0
-BANJO_RENUT_HOOK(sub_82302948, Get2DSurfaceDesc);  // D3D_Get2DSurfaceDesc_Thunk  // N&B sub_82655CC8
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, Get2DSurfaceDesc);  // D3D_Get2DSurfaceDesc  // N&B sub_822081A0
+BANJO_RENUT_HOOK(sub_820B3D50, Get2DSurfaceDesc);  // D3D_Get2DSurfaceDesc_Thunk  // feedingfrenzy-nx: GetLevelDesc (texture, level, desc) before each sprite
 #if 0  // bejeweled3-nx: N&B sub_82655738 (D3D_Get3DSurfaceDesc) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82427818, Get3DSurfaceDesc);  // D3D_Get3DSurfaceDesc  // N&B sub_82655738
 #endif
 #if 0  // bejeweled3-nx: N&B sub_82655DD0 (D3D_Get3DSurfaceDesc_Thunk) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82428C18, Get3DSurfaceDesc);  // D3D_Get3DSurfaceDesc_Thunk  // N&B sub_82655DD0
 #endif
-BANJO_RENUT_HOOK(sub_823018B0, LevelLayout_hook);  // D3D_GetLevelLayout  // N&B sub_82207D48
-BANJO_RENUT_HOOK(sub_82301D80, SubresourceLayout_hook);  // D3D_GetSubresourceLayout  // N&B sub_82207680
-BANJO_RENUT_HOOK(sub_82302938, D3DBaseTexture_GetLevelCount_hook);  // D3DBaseTexture_GetLevelCount  // N&B sub_821EF890
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, LevelLayout_hook);  // D3D_GetLevelLayout  // N&B sub_82207D48
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, SubresourceLayout_hook);  // D3D_GetSubresourceLayout  // N&B sub_82207680
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DBaseTexture_GetLevelCount_hook);  // D3DBaseTexture_GetLevelCount  // N&B sub_821EF890
 #if 0  // bejeweled3-nx: N&B sub_82655DA0 (D3DArrayTexture_GetArraySize) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_824264B0, D3DArrayTexture_GetArraySize_hook);  // D3DArrayTexture_GetArraySize  // N&B sub_82655DA0
 #endif
-BANJO_RENUT_HOOK(sub_823011A8, D3DArrayTexture_UnlockRect_hook);  // D3DArrayTexture_UnlockRect  // N&B sub_82655D88
-BANJO_RENUT_HOOK(sub_822F92B8, D3DConstantBuffer_Unlock_hook);  // D3DConstantBuffer_Unlock  // N&B sub_822693A0
+BANJO_RENUT_HOOK(sub_820B2570, D3DArrayTexture_UnlockRect_hook);  // D3DArrayTexture_UnlockRect  // feedingfrenzy-nx: UnlockRect (texture): flushes +28 / +44 pages
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DConstantBuffer_Unlock_hook);  // D3DConstantBuffer_Unlock  // N&B sub_822693A0
 #if 0  // bejeweled3-nx: N&B sub_82208928 (D3DTexture_GetSurfaceLevel) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82428958, D3DTexture_GetSurfaceLevel_hook);  // D3DTexture_GetSurfaceLevel  // N&B sub_82208928
 #endif
@@ -1757,14 +1767,14 @@ BANJO_RENUT_HOOK(sub_82428A50, D3DCubeTexture_GetCubeMapSurface_hook);  // D3DCu
 #if 0  // bejeweled3-nx: N&B sub_82655DD8 (D3DVolumeTexture_GetVolumeLevel) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_82428C20, D3DVolumeTexture_GetVolumeLevel_hook);  // D3DVolumeTexture_GetVolumeLevel  // N&B sub_82655DD8
 #endif
-BANJO_RENUT_HOOK(sub_822F9130, D3DDevice_CreateVertexBuffer_hook);  // D3DDevice_CreateVertexBuffer  // N&B sub_82654DB8
-BANJO_RENUT_HOOK(sub_822F9208, D3DDevice_CreateIndexBuffer_hook);  // D3DDevice_CreateIndexBuffer  // N&B sub_82654EE0
-BANJO_RENUT_HOOK(sub_82302970, D3DDevice_CreateTexture_hook);  // D3DDevice_CreateTexture  // N&B sub_82655EC8
-BANJO_RENUT_HOOK(sub_823023D0, SetTextureHeader_hook);  // D3D_SetTextureHeader  // N&B sub_8228E990
-BANJO_RENUT_HOOK(sub_823013D8, FindTextureSize_hook);  // D3D_FindTextureSize  // N&B sub_82287E60
-BANJO_RENUT_HOOK(sub_82301230, GetMaxMipLevels_hook);  // D3D_GetMaxMipLevels  // N&B sub_826554B8
-BANJO_RENUT_HOOK(sub_82301070, GetTextureDimensions_hook);  // D3D_GetTextureDimensions  // N&B sub_82207AF8
-BANJO_RENUT_HOOK(sub_82301108, GetGpuTextureDimensions_hook);  // D3D_GetGpuTextureDimensions  // N&B sub_82655540
-BANJO_RENUT_HOOK(sub_822FF400, BlockSizeOfGpuFormat_hook);  // D3D_BlockSizeOfGpuFormat  // N&B sub_82207B90
-BANJO_RENUT_HOOK(sub_823012B8, AlignTextureDimensions_hook);  // D3D_AlignTextureDimensions  // N&B sub_82207C28
-BANJO_RENUT_HOOK(sub_82301758, GetMipTailLevelOffsetCoords_hook);  // D3D_GetMipTailLevelOffsetCoords  // N&B sub_826555E0
+BANJO_RENUT_HOOK(sub_820BCE08, D3DDevice_CreateVertexBuffer_hook);  // D3DDevice_CreateVertexBuffer  // feedingfrenzy-nx: (length, usage, pool): (4 MB, 8, 0) once
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, D3DDevice_CreateIndexBuffer_hook);  // D3DDevice_CreateIndexBuffer  // N&B sub_82654EE0
+BANJO_RENUT_HOOK(sub_820B3D70, D3DDevice_CreateTexture_hook);  // D3DDevice_CreateTexture  // feedingfrenzy-nx: (width, height, depth, levels, usage, format, pool, type 3)
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, SetTextureHeader_hook);  // D3D_SetTextureHeader  // N&B sub_8228E990
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, FindTextureSize_hook);  // D3D_FindTextureSize  // N&B sub_82287E60
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, GetMaxMipLevels_hook);  // D3D_GetMaxMipLevels  // N&B sub_826554B8
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, GetTextureDimensions_hook);  // D3D_GetTextureDimensions  // N&B sub_82207AF8
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, GetGpuTextureDimensions_hook);  // D3D_GetGpuTextureDimensions  // N&B sub_82655540
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, BlockSizeOfGpuFormat_hook);  // D3D_BlockSizeOfGpuFormat  // N&B sub_82207B90
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, AlignTextureDimensions_hook);  // D3D_AlignTextureDimensions  // N&B sub_82207C28
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, GetMipTailLevelOffsetCoords_hook);  // D3D_GetMipTailLevelOffsetCoords  // N&B sub_826555E0

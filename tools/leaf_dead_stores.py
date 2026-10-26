@@ -39,7 +39,7 @@ import struct
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ENTRY_POINT = 0x822EC320  # bejeweled3-nx: the entry point (XEX header; Peggle 1's 0x823D81C0, Peggle 2's 0x823186D0)
+ENTRY_POINT = 0x820AD418  # feedingfrenzy-nx: the entry point (XEX header; Bejeweled 3's 0x822EC320, Peggle 2's 0x823186D0)
 
 
 def R(n):

@@ -20,7 +20,6 @@
 #include <rex/logging.h>
 #include <rex/platform.h>
 
-#include "feedingfrenzy_touch.h"
 
 #include "feedingfrenzy_capture.h"
 #include "feedingfrenzy_pc_profiler.h"
@@ -57,7 +56,8 @@ namespace {
 // (out/renut_port/device_offsets.md: SynchronizeToPresentationInterval, sub_822F59F0, reads it there; the layout is
 // Peggle 2's 21256 with two shifts, -24 from 11584 and -16 from 13600, so Peggle 2's +14000 is +13984 here). Peggle 1's
 // XDK 7776 had it at +13596, as N&B's 7645.
-constexpr uint32_t kDeviceIntervalOffset = 13984;
+// feedingfrenzy-nx (2026-10-26): not found yet in XDK 2571's device: 0 = not used (no 60 fps forcing).
+constexpr uint32_t kDeviceIntervalOffset = 0;
 
 bool Fps60() {
   static const bool on = REXCVAR_GET(feedingfrenzy_fps) >= 60 && kDeviceIntervalOffset != 0;
@@ -179,12 +179,13 @@ void PaceRenutSwap(uint32_t interval) {
 }  // namespace
 #endif
 
-extern "C" REX_FUNC(__imp__sub_822F5EB0);
-REX_HOOK_RAW(sub_822F5EB0) {  // D3DDevice_Swap
-  // The touches since the previous frame, on the game's thread between two frames (feedingfrenzy_touch.cpp).
-  feedingfrenzy::touch::Dispatch(ctx, base);
+// feedingfrenzy-nx (2026-10-26): the frame is Feeding Frenzy's D3DDevice_Present (sub_820B17B0, once a frame), which
+// calls D3DDevice_Swap (sub_820B1260, the only caller of VdSwap). Renut's renderer replaces Present (its Swap is
+// native, so the guest's never runs): this hook shares the address with it (BANJO_RENUT_HOOK_SHARED, draw.cpp).
+extern "C" REX_FUNC(__imp__sub_820B17B0);
+REX_HOOK_RAW(sub_820B17B0) {  // D3DDevice_Present
   // Which presentation interval the game asks for (1 = every vblank, 2 = every second one), when it changes.
-  {
+  if (kDeviceIntervalOffset) {
     static uint32_t last_interval = ~0u;
     uint32_t interval_be;
     std::memcpy(&interval_be, base + ctx.r3.u32 + kDeviceIntervalOffset, 4);
@@ -211,7 +212,7 @@ REX_HOOK_RAW(sub_822F5EB0) {  // D3DDevice_Swap
     uint8_t interval_bytes[4];
     std::memcpy(interval_bytes, base + ctx.r3.u32 + kDeviceIntervalOffset, 4);
     if (!kDeviceIntervalOffset) interval_bytes[3] = 1;
-    renut_native_sub_822F5EB0(ctx, base);  // Renut's Swap (presents)
+    renut_native_sub_820B17B0(ctx, base);  // Renut's Present (resolves and presents)
     // Renut's Swap does not reach the kernel's VdSwap, which advances the SDK's frame clock (clock_per_swap_hz, the
     // deterministic runs that compare Renut with the emulated GPU frame for frame; a no-op otherwise).
     rex::chrono::Clock::NotifyGuestSwap();
@@ -221,7 +222,7 @@ REX_HOOK_RAW(sub_822F5EB0) {  // D3DDevice_Swap
     return;
   }
 #endif
-  __imp__sub_822F5EB0(ctx, base);
+  __imp__sub_820B17B0(ctx, base);
   g_feedingfrenzy_game_frames.fetch_add(1, std::memory_order_relaxed);
 #if FEEDINGFRENZY_NATIVE_RENDERER
   // The native ring thread waits in a WAIT_REG_MEM for the game's frame pacing word most of each frame

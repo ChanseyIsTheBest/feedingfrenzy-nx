@@ -18,16 +18,5 @@
 REXCVAR_DEFINE_UINT32(feedingfrenzy_test_seed, 0, "FeedingFrenzy",
                       "Test runs: every random generator of the game seeded with this value (0 = the game's own seeds)");
 
-extern "C" REX_FUNC(__imp__sub_825286E0);
-REX_HOOK_RAW(sub_825286E0) {  // MTRand::SRand
-  if (const uint32_t seed = REXCVAR_GET(feedingfrenzy_test_seed)) {
-    static bool logged = false;
-    if (!logged) {
-      logged = true;
-      REXLOG_INFO("[test] MTRand seeds replaced by feedingfrenzy_test_seed = {} (the game's first was {})", seed,
-                  ctx.r4.u32);
-    }
-    ctx.r4.u64 = seed;
-  }
-  __imp__sub_825286E0(ctx, base);
-}
+// feedingfrenzy-nx (2026-10-26): Bejeweled 3's MTRand::SRand hook removed; Feeding Frenzy's random generator is
+// not found yet, so feedingfrenzy_test_seed does nothing for now.

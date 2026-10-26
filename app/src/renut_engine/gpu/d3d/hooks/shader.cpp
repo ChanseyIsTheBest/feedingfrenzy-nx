@@ -240,7 +240,9 @@ u32 CreateShaderRecord(const be_u32 *function, bool pixel) {
     return 0;
   const auto *container = reinterpret_cast<const uint8_t *>(function);
   const auto *header = reinterpret_cast<const d3d::ShaderContainer *>(container);
-  if ((u32(header->flags) & 0xFFFFFF00u) != 0x102A1100u) {
+  // feedingfrenzy-nx (2026-10-26): version 0x0E too (XDK 2571's run-time shader compiler); the translator reads it
+  // through XenosRecomp/container_0e.h, and only the sizes are read here.
+  if ((u32(header->flags) & 0xFFFFFF00u) != 0x102A1100u && (u32(header->flags) & 0xFFFFFF00u) != 0x102A0E00u) {
     RGPU_ERROR("Create{}Shader: not a shader container (flags {:08X})", pixel ? "Pixel" : "Vertex",
                u32(header->flags));
     return 0;
@@ -277,7 +279,7 @@ void RegisterGuestShader(u32 shader_va, u32 physical_va, bool pixel) {
   const u32 flags = header->flags;
   const u32 virtual_size = header->virtualSize;
   const u32 physical_size = header->physicalSize;
-  if ((flags & 0xFFFFFF00u) != 0x102A1100u || ((flags & 1) != 0) == pixel ||
+  if (((flags & 0xFFFFFF00u) != 0x102A1100u && (flags & 0xFFFFFF00u) != 0x102A0E00u) || ((flags & 1) != 0) == pixel ||
       virtual_size < sizeof(d3d::ShaderContainer) || virtual_size > 0x10000 ||
       physical_size == 0 || physical_size > 0x100000) {
     RGPU_ERROR("XGRegister{}Shader {:08X}: no shader container at {:08X} (flags {:08X})",
@@ -453,14 +455,15 @@ void D3DVertexShader_Bind_hook(u32 shader_va, u32 /*flags*/, u32 declaration_va,
 
 } // namespace
 
-BANJO_RENUT_HOOK(sub_82306790, D3DDevice_CreateVertexShader_hook);  // D3DDevice_CreateVertexShader  // N&B sub_8264E8B0
-BANJO_RENUT_HOOK(sub_823065A8, D3DDevice_CreatePixelShader_hook);  // D3DDevice_CreatePixelShader  // N&B sub_8264E6A8
-BANJO_RENUT_HOOK(sub_82304FB0, D3DDevice_CreateVertexDeclaration_hook);  // D3DDevice_CreateVertexDeclaration  // N&B sub_8264EA90
+BANJO_RENUT_HOOK(sub_820B74D0, D3DDevice_CreateVertexShader_hook);  // D3DDevice_CreateVertexShader  // feedingfrenzy-nx: (container) -> shader; 592-byte header
+BANJO_RENUT_HOOK(sub_820B73E8, D3DDevice_CreatePixelShader_hook);  // D3DDevice_CreatePixelShader  // feedingfrenzy-nx: (container) -> shader; 56-byte header
+BANJO_RENUT_HOOK(sub_820B6180, D3DDevice_CreateVertexDeclaration_hook);  // D3DDevice_CreateVertexDeclaration  // feedingfrenzy-nx: (elements) -> declaration; called once
 #if 0  // bejeweled3-nx: N&B sub_82657048 (D3DVertexShader_Bind) is not linked in Bejeweled 3
 BANJO_RENUT_HOOK(sub_8244F6E0, D3DVertexShader_Bind_hook);  // D3DVertexShader_Bind  // N&B sub_82657048
 #endif
-BANJO_RENUT_HOOK(sub_82306698, XGRegisterVertexShader_hook);  // XGRegisterVertexShader  // N&B sub_8264E7B8
-BANJO_RENUT_HOOK(sub_82304A50, XGRegisterPixelShader_hook);  // XGRegisterPixelShader  // N&B sub_8264E670
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, XGRegisterVertexShader_hook);  // XGRegisterVertexShader  // N&B sub_8264E7B8
+// feedingfrenzy-nx: not linked or not called in XDK 2571: BANJO_RENUT_HOOK(sub_XXXXXXXX, XGRegisterPixelShader_hook);  // XGRegisterPixelShader  // N&B sub_8264E670
+#if 0  // feedingfrenzy-nx: Feeding Frenzy never calls the shaders' GetFunction (out/ff_d3d_api.txt)
 // bejeweled3-nx (2026-10-22): the shaders' GetFunction (GetShaderFunction above); not hooked in banjo-nx's tree.
 BANJO_RENUT_HOOK_RAW(sub_823064F8) {  // D3DPixelShader_GetFunction
   if (!GetShaderFunction(ctx, base, renut::gpu::RecordKind::PixelShader))
@@ -470,3 +473,4 @@ BANJO_RENUT_HOOK_RAW(sub_82306550) {  // D3DVertexShader_GetFunction
   if (!GetShaderFunction(ctx, base, renut::gpu::RecordKind::VertexShader))
     __imp__sub_82306550(ctx, base);
 }
+#endif

@@ -74,8 +74,8 @@ template <uint32_t N>
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--gen', required=True)
-    ap.add_argument('--memcpy', default='825DF500')  # bejeweled3-nx: Bejeweled 3's (Peggle 2's 825F0AE0, byte for byte)
-    ap.add_argument('--memset', default='825DEDD0')  # bejeweled3-nx: Bejeweled 3's (Peggle 2's 825F10B0, byte for byte)
+    ap.add_argument('--memcpy', default='822CD480')  # feedingfrenzy-nx: Feeding Frenzy's (another version than Peggle 2's)
+    ap.add_argument('--memset', default='822CCC40')  # feedingfrenzy-nx: Feeding Frenzy's (Peggle 2's 825F10B0, byte for byte)
     ap.add_argument('--check', action='store_true')
     a = ap.parse_args()
     call = re.compile(r'^(\t+)((?:__imp__)?sub_(%s|%s)\(ctx, base\));$' % (a.memcpy.upper(), a.memset.upper()))

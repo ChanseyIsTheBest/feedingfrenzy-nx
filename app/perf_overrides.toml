@@ -78,4 +78,18 @@ setjmp_save_locals = true
 # v65, v69 and v72 before writing them (below). The range covers them.
 non_volatile_as_local_keep = ["v64-v72"]
 
+# feedingfrenzy-nx (2026-10-26, the user's choice: "could we use the new codegen options"): futari-nx's VMX keys, so
+# VMX float results are the Xbox 360's, not x86's (simde emulates x86 on AArch64 too). The generator change is
+# futari-nx's out/vmx_exact_codegen.patch, applied to sdk/ (sdk/include/rex/codegen/config.h has each key's note).
+#   vmx_exact_minmax       vmaxfp / vminfp: NaN and +-0 as on the 360
+#   vmx_fused_madd         vmaddfp / vnmsubfp fused (one rounding): real vector FMLA on the Switch
+#   vmx_expte_range        vexptefp: 0 below -126, +inf from 128, a NaN quieted
+#   vmx_cmpb_nan           vcmpbfp: a NaN sets both bound bits
+#   vmx_dot_overflow_qnan  vmsum3fp128 / vmsum4fp128: QNaN on overflow
+vmx_exact_minmax = true
+vmx_fused_madd = true
+vmx_expte_range = true
+vmx_cmpb_nan = true
+vmx_dot_overflow_qnan = true
+
 [functions]
