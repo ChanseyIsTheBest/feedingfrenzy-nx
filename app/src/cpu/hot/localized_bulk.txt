@@ -2,4 +2,29 @@
 # as generated code with at least 3 samples in the console Lightning profiles of 10:21 and 10:41
 # (rex_profile (24).log and newlogs/logs/rex/rex_profile.log, all threads), localized by tools/localize_native.py --bulk
 # with write-backs of only the changed registers. Left out: 12 tiny leaves, 25 addresses our sources mention.
-# feedingfrenzy-nx (2026-10-26): empty until console profiles of Feeding Frenzy (Bejeweled 3's entries removed).
+# feedingfrenzy-nx (2026-10-26): the next 65 of the same profile (36th to 100th), so 100 in all with localized.txt.
+82256FB8 10 samples: the game thread 10
+82256CB0 10 samples: the game thread 10
+82255C38 10 samples: the game thread 10
+82254C58 10 samples: the game thread 10
+8216BD48 10 samples: the game thread 10
+820B02F4 10 samples: the game thread 10
+820946A0 10 samples: the game thread 10
+82089A70 10 samples: the game thread 10
+820897F0 10 samples: the game thread 10
+82089380 10 samples: the game thread 10
+820862E8 10 samples: the game thread 10
+82084180 10 samples: the game thread 10
+82062190 10 samples: the game thread 10
+820620D8 10 samples: the game thread 10
+820620A8 10 samples: the game thread 10
+82060B30 10 samples: the game thread 10
+82257FE8 8 samples: the game thread 8
+8228AD48 6 samples: the game thread 6
+822593E0 6 samples: the game thread 6
+822BD7E0 5 samples: other guest threads
+8225D0B0 4 samples: the game thread 4
+82186A30 2 samples: the game thread 2
+820CB860 2 samples: the game thread 2
+820B7D68 2 samples: the game thread 2
+820B6BF0 2 samples: the game thread 2

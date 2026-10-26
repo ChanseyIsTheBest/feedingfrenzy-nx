@@ -19,6 +19,9 @@
 // Hand-written natives (C runtime routines).
 #include "cpu/hot/n_825F0AE0.h"
 #include "cpu/hot/n_825F10B0.h"
+#include "cpu/hot/n_822CCD58.h"
+#include "cpu/hot/n_822CEDF0.h"
+#include "cpu/hot/n_822CFFE0.h"
 
 // The guard is off by default since 2026-10-14 (before: the first 256 calls of each thread, then 1 in 4096). The user,
 // on the stutter its checks of the Wwise mixing copies caused: "it's a release build do we really need self-checks?".
@@ -376,8 +379,24 @@ void Check(Hook& h, PPCContext& ctx, uint8_t* base) {
 // C runtime (feedingfrenzy-nx, 2026-10-26; tools/crt_signatures.py scan and tools/guest_code_hash.py):
 //   memset at 0x822CCC40 is byte for byte Peggle 2's 0x825F10B0 (160 bytes, FNV-1a 64 0x54D201DC8A21DABA, the code
 //   check of n_825F10B0.h), so its native applies here;
-//   memcpy at 0x822CD480 is another version (1056 bytes; Peggle 2's is 1160): n_825F0AE0.h does not apply and the game's
-//   own runs.
+//   memcpy at 0x822CD480 is another version (1056 bytes; Peggle 2's is 1160) with the same contract: r3 saved at
+//   -8(r1) and returned, a forward copy (no load or store below its pointers), no dcbz, 32-bit sizes and compares; so
+//   n_825F0AE0's native (which declines the overlaps a forward copy smears and the 4 GB wraps) applies under this
+//   routine's own size and hash (2026-10-26, the emulator profile: seventh).
+// The emulator profile's other C runtime routines (out/renut_tests/emu/prof1, docs/feedingfrenzy-notes.md):
+//   strstr sub_822CCD58 (39 % of the main thread's samples), _stricmp sub_822CFFE0, memmove sub_822CEDF0.
+FEEDINGFRENZY_HOT_HOOK(822CD480, feedingfrenzy_cpu_native_memcpy, "Native CRT memcpy (sub_822CD480): host memcpy/memmove",
+                 feedingfrenzy::hot::n_825F0AE0, &feedingfrenzy::hot::n_825F0AE0::Writes, feedingfrenzy::hot::Cmp::kReturn, 1056,
+                 0xA7EAD6E565BDE9F2ull)
+FEEDINGFRENZY_HOT_HOOK(822CCD58, feedingfrenzy_cpu_native_strstr, "Native CRT strstr (sub_822CCD58): host strstr",
+                 feedingfrenzy::hot::n_822CCD58, &feedingfrenzy::hot::n_822CCD58::Writes, feedingfrenzy::hot::Cmp::kReturn, 128,
+                 0x5294550D483FD945ull)
+FEEDINGFRENZY_HOT_HOOK(822CFFE0, feedingfrenzy_cpu_native_stricmp, "Native CRT _stricmp (sub_822CFFE0)",
+                 feedingfrenzy::hot::n_822CFFE0, &feedingfrenzy::hot::n_822CFFE0::Writes, feedingfrenzy::hot::Cmp::kReturn, 88,
+                 0x214392DE394E0692ull)
+FEEDINGFRENZY_HOT_HOOK(822CEDF0, feedingfrenzy_cpu_native_memmove, "Native CRT memmove (sub_822CEDF0): host memmove",
+                 feedingfrenzy::hot::n_822CEDF0, &feedingfrenzy::hot::n_822CEDF0::Writes, feedingfrenzy::hot::Cmp::kReturn, 192,
+                 0xA554986653AAE325ull)
 FEEDINGFRENZY_HOT_HOOK(822CCC40, feedingfrenzy_cpu_native_memset, "Native CRT memset (sub_822CCC40): host memset",
                  feedingfrenzy::hot::n_825F10B0, &feedingfrenzy::hot::n_825F10B0::Writes, feedingfrenzy::hot::Cmp::kReturn, 160,
                  0x54D201DC8A21DABAull)

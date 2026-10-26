@@ -3,3 +3,7 @@
 # reads what the original reads, so it counts as a call of the original. Every other hooked call (the localized
 # copies, the port's own hooks) reads everything.
 822CCC40 CRT memset: hand-written native n_825F10B0.h (Peggle 2's address; the same code here) (reads r3, r4, r5)
+822CD480 CRT memcpy: n_825F0AE0.h's native (the same contract) (reads r3, r4, r5; returns r3)
+822CCD58 CRT strstr: hand-written native n_822CCD58.h (reads r3, r4; returns r3)
+822CFFE0 CRT _stricmp: hand-written native n_822CFFE0.h (reads r3, r4; returns r3)
+822CEDF0 CRT memmove: hand-written native n_822CEDF0.h (reads r3, r4, r5; returns r3)

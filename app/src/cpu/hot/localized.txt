@@ -12,4 +12,39 @@
 # down to 15ms"): the 35 hottest guest functions of the game's main thread that were not native yet, by self time in
 # the user's two console profiles of Lightning (logs/rex/rex_profile.log of the 08:42 NRO and rex_profile (23).log of
 # the 09:29 NRO, reports 4 on; tools/switch_hot_functions.py with each build's map), samples of both summed:
-# feedingfrenzy-nx (2026-10-26): empty until a console profile of Feeding Frenzy (Bejeweled 3's entries removed).
+# feedingfrenzy-nx (2026-10-26, the user: "machine optimise around the top 100", "just use data from the emulator"): the hottest 35 generated functions of the Ryujinx profile out/renut_tests/emu/prof1 (all guest threads, 300 s of play).
+82256198 960 samples: the game thread 960
+822575F8 108 samples: the game thread 108
+82259378 100 samples: the game thread 100
+82061570 94 samples: the game thread 94
+82255C50 50 samples: the game thread 50
+82259158 40 samples: the game thread 40
+8207CEE8 40 samples: the game thread 40
+82258D88 30 samples: the game thread 30
+822583A0 30 samples: the game thread 30
+82257EB8 30 samples: the game thread 30
+82256548 30 samples: the game thread 30
+822A0838 28 samples: the game thread 28
+82060720 24 samples: the game thread 24
+822A5680 22 samples: the game thread 22
+8229DEE8 22 samples: the game thread 22
+822CC940 20 samples: the game thread 20
+822682C8 20 samples: the game thread 20
+82268090 20 samples: the game thread 20
+82259010 20 samples: the game thread 20
+82089968 20 samples: the game thread 20
+82060518 20 samples: the game thread 20
+822CC868 18 samples: the game thread 18
+82295D08 14 samples: the game thread 14
+82287258 12 samples: the game thread 12
+822A02B0 10 samples: the game thread 10
+82294B98 10 samples: the game thread 10
+82283488 10 samples: the game thread 10
+82269DD8 10 samples: the game thread 10
+82267928 10 samples: the game thread 10
+8225A948 10 samples: the game thread 10
+8225A5D8 10 samples: the game thread 10
+8225A3C8 10 samples: the game thread 10
+822599D0 10 samples: the game thread 10
+82259558 10 samples: the game thread 10
+822591F0 10 samples: the game thread 10

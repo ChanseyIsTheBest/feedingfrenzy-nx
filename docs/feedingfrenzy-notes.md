@@ -152,3 +152,52 @@ The user chose Renut on deko3d for the Switch (over the emulated GPU with the NV
   20), 60.00 game frames a second, Renut's render thread 1.42 ms a frame, no shader missing, no crash in 150 s.
 - **Delivered:** `out/dist/dev_20261026_feedingfrenzy/feedingfrenzy-nx/` (NRO `379533c7...`, the game pack, README.txt);
   ELF and map `out/nx/elf/feedingfrenzy_dev_20261026_1458.*`.
+
+## Optimising the hot functions (2026-10-26, from the emulator)
+
+The user: "do the bejeweled 3 optimising functions guide, just use data from the emulator: hand write a handful of the
+top functions, machine optimise around the top 100, and do the register write-back stuff"; then "64 functions is
+enough". The method is docs/optimising-functions.md.
+
+- **Profile** (Ryujinx `prof1`: 300 s of Stage 1 with the stick, `switch_profile_report` / `switch_profile_stacks`;
+  `out/renut_tests/emu/prof1/rex_profile.log`, map `out/nx/elf/feedingfrenzy_dev_20261026_1458.map`): the main thread
+  is about 20 % of a core at 60 fps (it waits for the frame most of the time). 64 generated functions were sampled at
+  all (all guest threads; `tools/switch_hot_functions.py --top 5000`):
+  - `sub_822CCD58`, the CRT **strstr** (a byte-by-byte search), 39 % of the main thread's busy samples;
+  - `sub_82256198`, a game method that ORs each child's flags (+112) into its own over a vector at +296 (the debug
+    iterator's checks still in it), 21 %;
+  - the rest 2.4 % and less each (`_stricmp` sub_822CFFE0, memcpy sub_822CD480, memmove sub_822CEDF0 among them).
+  A second, longer run (`prof2`, Time Attack) stopped before the first frame in Ryujinx (the guest never presented; the
+  same NRO started twice before and since): watched for in the later runs.
+- **Hand-written natives** (five):
+  - the CRT's strstr (`n_822CCD58.h`: the host's strstr; an empty needle returns r3 as it came), _stricmp
+    (`n_822CFFE0.h`: written out, because this CRT returns the first string's byte *before* lower-casing when the second
+    ends: "A" against "" gives 65), memmove (`n_822CEDF0.h`: the host's memmove; overlapping ranges on both sides of
+    0x80000000 declined, the original picks its direction by a signed compare) and memcpy (sub_822CD480 with
+    n_825F0AE0.h's native: the same contract, checked: r3 saved at -8(r1), a forward copy, no dcbz, 32-bit sizes),
+    registered with their sizes and FNV-1a 64 hashes in `feedingfrenzy_hot_guest.cpp` and listed in `hand.txt`;
+  - `h_82256198.h`: the vector's begin / end loaded once (the loop's one store, +112, cannot reach +300 / +304), the
+    running OR kept in a register (still stored every iteration), the one-instruction callee inline; every effect of
+    the copy audited in the header.
+- **Localized copies:** the other 60 sampled functions (35 in `localized.txt`, 25 in `localized_bulk.txt`); 12 have
+  small callees inline. **Write-backs of the changed registers only** (tools/hand_native_dirty_sync.py, in every copy):
+  1,427 register stores kept of 2,839 (49 % removed); smart sync at 16 of 104 call sites (84 write-back / reload pairs
+  fewer). `sub_820B02F4` (an SEH funclet: an unrecognized use of the XER local) keeps all of its write-backs.
+- **Checks:**
+  - PC verify mode (`verify1`, Renut, play): 20,567,779 checked calls of the leaf copies and the CRT natives, 0
+    differences. In 10 s: strstr 486,144 calls, memmove 355,840, memcpy 72,192, `h_82256198` 913,920.
+  - The deterministic PC comparison (Bejeweled 3's check of the natives with calls) does not work in this game:
+    `tools/win/ff_lockstep_check.ps1` (the test seed on the CRT srand sub_822CCCE0, the frame clock, the pad script)
+    gives two baseline runs without any reproducible frame. The guest time is the frame clock's (mftb reads
+    QueryGuestTickCount), but the game loads its data on another thread, so the number of frames the loading takes
+    varies with the PC's disk timing, and the frame-timed presses land on other screens (`ta` / `tb`: at frame 900 one
+    run is still at "PRESS A TO START", the other in the menu). The copies with calls are the generator's code
+    (exact by construction, as in Bejeweled 3); `h_82256198`, the one hand-written native with a call, is audited in its
+    header.
+- **Measured** (Ryujinx `prof3`: the optimised NRO, `prof1`'s script and length): strstr's share fell from 886 samples
+  to 252 (the host's strstr 30, with the memcmp 187 and strlen 35 it calls); `h_82256198` 575 samples where the copy-less
+  run had 480, while the unchanged-shape functions around it rose 1.5-2.5x: the run's workload was heavier (it reached
+  level changes: host memmove 338 and memset 246 samples, the guest's memmove had 20). Whole-frame times of the two runs
+  are not comparable (the game's scenes differ between runs; see the deterministic check above).
+- Delivered: the optimised NRO in `out/dist/dev_20261026_feedingfrenzy/feedingfrenzy-nx/`; ELF and map
+  `out/nx/elf/feedingfrenzy_dev_opt_20261026.*`.
