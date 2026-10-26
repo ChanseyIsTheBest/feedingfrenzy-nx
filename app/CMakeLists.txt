@@ -591,12 +591,10 @@ if(REXGLUE_PLATFORM_SWITCH)
     # tools/switch_hot_functions.py and the console profiler's samples. It must come from the same build as the NRO.
     target_link_options(feedingfrenzy PRIVATE "LINKER:-Map=${CMAKE_BINARY_DIR}/feedingfrenzy.map")
     # The homebrew menu's entry: name, author, version and icon (app/icon.jpg, 256x256 JPEG, when the project has one).
-    set(FEEDINGFRENZY_VERSION "1.0.1" CACHE STRING "NRO display version" FORCE)
-    # bejeweled3-nx (2026-10-22): no icon in the repository yet (peggle1-nx's app/icon.jpg was Peggle's, by the user's
-    # exception for that game). Development builds take out/icon_dev.jpg: the game's own 64x64 game.png, scaled to
-    # 256x256 on black (game data, never committed). The release icon (2026-10-22, the user's image for the final build,
-    # out/dist/dev_20261022_feedingfrenzy/bejeweled3-nx/bejeweled-3_qr3k.jpg scaled to 256x256) is out/icon.jpg, also kept
-    # out of the repository.
+    set(FEEDINGFRENZY_VERSION "0.1.0" CACHE STRING "NRO display version" FORCE)
+    # feedingfrenzy-nx (2026-10-26): no icon in the repository. Development builds take out/icon_dev.jpg (the game's
+    # own title_image.png scaled to 256x256: game data, never committed); out/icon.jpg, when there is one, is the
+    # release's.
     set(_feedingfrenzy_icon "")
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/icon.jpg")
         set(_feedingfrenzy_icon ICON "${CMAKE_CURRENT_SOURCE_DIR}/icon.jpg")
@@ -606,7 +604,7 @@ if(REXGLUE_PLATFORM_SWITCH)
         set(_feedingfrenzy_icon ICON "${CMAKE_CURRENT_SOURCE_DIR}/../out/icon_dev.jpg")
     endif()
     rexglue_switch_add_nro(feedingfrenzy
-        NAME "Bejeweled 3"
+        NAME "Feeding Frenzy"
         AUTHOR "ChanseyIsTheBest"
         VERSION "${FEEDINGFRENZY_VERSION}"
         ${_feedingfrenzy_icon})

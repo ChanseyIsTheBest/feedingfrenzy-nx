@@ -79,3 +79,76 @@ package: `Feeding Frenzy/584107F1/000D0000/F2727A71...`. That is an XBLA game (c
   - `tools/inline_memcalls.py` and `tools/leaf_dead_stores.py` take this game's memcpy, memset and entry point.
 - Renut's renderer stays off (`FEEDINGFRENZY_RENUT_RENDERER=OFF`) until its hooks are at this game's addresses: the
   first boots use the emulated GPU.
+
+## First boots on the PC (2026-10-26, emulated GPU)
+
+- The first build failed in the post-codegen passes (they rewrote files while the build compiled them, Bejeweled 3's
+  "build loop" race); `tools/win/bj3_regen_build.ps1` (codegen target first, then the rest) builds it.
+- `boot1`: the Sprout Games / Oberon Media splash, the title ("PRESS A TO START") with the fish swimming, 60 game frames a
+  second, the XMA audio decoding, the generated-code self-checks 0 differences.
+- `play1` (pad script): the main menu (New Game, Time Attack, Leaderboards, Achievements, Help & Options, Return to
+  Arcade), Stage 1's introduction, play (eating fish: "Yummy!", being eaten: "SORRY"). The log has no unimplemented call;
+  only the splash variants the game tries first (`hd_gameSplash_en.jpg` and others) are missing, as on the 360.
+
+## Renut's renderer at Feeding Frenzy's addresses (2026-10-26)
+
+The user chose Renut on deko3d for the Switch (over the emulated GPU with the NVK Vulkan driver).
+
+- **What the game calls** (`out/ff_d3d_api.txt`): the Direct3D library is about `0x820AE000`-`0x820CA000` (packet
+  builders, the 117 small state functions at `0x820BA000`); game code calls 96 of its 570 functions.
+- **The trace** (`app/src/feedingfrenzy_d3d_trace.cpp`, PC test aid, off by default; the build leaves it out when Renut's
+  renderer is in): every call of the 96 up to a game frame, whether r3 was the device (the word at `0x82310EE0`,
+  `Direct3D_CreateDevice`'s output), the first arguments, the order within a frame. The device is created by
+  `sub_820AADF8` (`CreateDevice(0, 1, 0, 0, &params, &0x82310EE0)`, then Clear and Present); a frame is Clear, about 80
+  sprites, Present. A sprite (game code around `0x820A59D8`): GetLevelDesc of its texture, the vertex buffer's Lock of
+  0x90 bytes (4 vertices of 36: position, two colors, two texture coordinates), Unlock, SetVertexDeclaration,
+  SetStreamSource, SetTexture, DrawVertices(triangle strip, 0, 4), SetTexture(1, NULL), the shaders. Creation functions take
+  no device (CreateTexture 417 times, each locked, filled and unlocked; one 4 MB vertex buffer; one declaration).
+- **States:** Feeding Frenzy's state block is Bejeweled 3's in the same D3DRS order (`out/ff_state_align.txt`, a
+  Needleman-Wunsch alignment on what each function writes): 198 pairs at the full score; the packet fields 96 bytes lower
+  here, the shadows 560. XDK 2571 lacks LastPixel, LineWidth, Buffer2Frames and HiZEnable / HiZWriteEnable at that place.
+- **The device's front is N&B's layout:** the game writes sampler fields of the texture fetch constants itself
+  (`device+0x480`, dirty bits in the qword at +16), and its SetVertexShaderConstantF (`sub_820B59E8`) writes `+0x780` and
+  the dirty mask at +0: where Renut's device keeps them. So those stay the game's own code.
+- **Signatures checked one by one** against Renut's hooks: Clear (Z in f1, stencil in r9), SetStreamSource (stride / 4
+  stored), CreateTexture (width, height, depth, levels, usage, format, pool, type 3), CreateVertexBuffer, the shader
+  creators (one argument: the container), CreateVertexDeclaration (`sub_820B6180`; `sub_820B8608` is the shader
+  builder's 9,808-byte object), GetLevelDesc = Renut's Get2DSurfaceDesc, LockRect = D3DLineTexture_LockRect's
+  arguments. **The vertex buffer's Lock returns base + offset** here (N&B's returns the base): an adapter.
+- **The table** (`tools/renut_hook_remap_ff.py`): 225 hooks at this game's addresses, 99 commented out. Present is the
+  shared hook: the frame hook (frame counter, captures, pacing) is on `sub_820B17B0` and calls Renut's Present.
+- **Renut's guest data:** the XDK build qword `0x822F20D8` (`0x000200000A0B4001`), the `VdGlobalDevice` import slot
+  `0x82000574`, the caps `0x8200C8D0`, the format table `0x8200C670` (Bejeweled 3's 128 bytes); the state defaults as host
+  constants (from Bejeweled 3's tables: XDK 2571's are not N&B's order); the HiZ owner a host variable; no export
+  switches, no "no large pages" flag; the full viewport passed as values. GetCurrentThreadId `sub_822A5FA0` and XMemFree
+  `sub_820AD808` (the same code as Bejeweled 3's).
+- **Shaders:** the game compiles its 5 shaders at start (3 pixel, 2 vertex) with XDK 2571's compiler, which writes
+  containers of version **0x0E**: a 0x18-byte header (flags, virtual size, physical size, definition table, constant
+  table, shader info), the shader info one word shorter in front (interpolator info at +16, not +20; vertex shaders an extra
+  word after field20), literals inline in the definition table. `XenosRecomp/container_0e.h` turns each into 0x11 under
+  its own hash; Renut accepts both. The literal's register field is (register + 48) << 4: the vertex shaders' `0x12F0` is
+  c255 (`oPos.xy = position + c255.x`, the half-pixel -0.5).
+- **PC, Renut on Vulkan** (`renut2`): the splash, title, menu, Stage 1, play, the HUD and the score as with the emulated
+  GPU.
+
+## The first Switch build (2026-10-26)
+
+- **Shaders:** XenosRecomp with `BANJO_HLSL_OVERRIDE=out/pc/renut_gpu/early_alpha_hlsl` and `BANJO_DEKO3D_SPIRV_DIR`
+  (the 5 containers to SPIR-V), `deko3d_shaders.py` (5 of 5 compile with uam: 2 vertex of 2 KB, 3 pixel of 1 KB),
+  `deko3d_glsl_opt.py`, `deko3d_shader_package.py` (22 KB), `renut_switch_shader_cache.py`. All five are the game's
+  run-time shaders, so the NRO carries them all (none is stored in default.xex). The deko3d PC tools (SPIRV-Cross, uam)
+  were copied from bejeweled3-nx's `out/deko3d_tools`.
+- **Build:** `tools/win/build_switch.ps1 -Pgo none -Define "FEEDINGFRENZY_SWITCH_LTO=OFF"`. The first failed on the
+  built-in config's raw string delimiter (`FEEDINGFRENZYCONFIG`, 19 characters; C++ allows 16): now `FFCONFIG`. NRO
+  22.6 MB, "Feeding Frenzy" 0.1.0 with the game's 64x64 `title_image.png` as the development icon (`out/icon_dev.jpg`).
+- **`tools/check_switch_build.py`:** all checks passed after:
+  - KNOWN_HALTS: memcpy `sub_822CD480` (three `b .` in XDK 2571's CRT copy, each after a `bdnz` whose loop leaves
+    through the `bge` before it);
+  - STREAMING_COPIES: none (no function has the 72-vperm-and-lvsl shape);
+  - the vector fused multiply-adds of `vmx_fused_madd`: 71 in 14 functions, exactly the generated code's `vmx_madd_ps`
+    sites (`FusedMaddFunctions`: the functions with the helper or an inlined copy of one).
+- **Ryujinx** (`emu1`; SD `switch\feedingfrenzy-nx` a junction to `out/emu_sd/feedingfrenzy-nx` in the Peggle data
+  folder; `tools/build_asset_pack.py` made the game pack, 32 files, 30 MB): splash, title, menu, Stage 1, play (score
+  20), 60.00 game frames a second, Renut's render thread 1.42 ms a frame, no shader missing, no crash in 150 s.
+- **Delivered:** `out/dist/dev_20261026_feedingfrenzy/feedingfrenzy-nx/` (NRO `379533c7...`, the game pack, README.txt);
+  ELF and map `out/nx/elf/feedingfrenzy_dev_20261026_1458.*`.

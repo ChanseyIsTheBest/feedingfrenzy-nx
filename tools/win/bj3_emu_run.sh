@@ -1,6 +1,6 @@
 #!/bin/bash
 # Bejeweled 3's NRO in banjo-nx's Ryujinx fork, with the Peggle ports' data folder (D:\New folder\ryu-data\peggle2,
-# -r; its SD folder switch/bejeweled3-nx is a junction to out/emu_sd/bejeweled3-nx: game pack, NRO, toml). Runs
+# -r; its SD folder switch/feedingfrenzy-nx is a junction to out/emu_sd/feedingfrenzy-nx: game pack, NRO, toml). Runs
 # <seconds>, stops only this instance (its process id), and collects the NRO's log and shots into
 # out/renut_tests/emu/<name>. Other ports' instances may run at the same time (timings are then not meaningful).
 #
@@ -10,7 +10,7 @@ set -u
 NAME=$1; SECS=$2; shift 2
 if [ "$SECS" -gt 590 ]; then SECS=590; fi
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-SD="$ROOT/out/emu_sd/bejeweled3-nx"
+SD="$ROOT/out/emu_sd/feedingfrenzy-nx"
 OUT="$ROOT/out/renut_tests/emu"; mkdir -p "$OUT/$NAME"
 # EMU_BASE=none: no toml is written (a first start as the player has it: the NRO writes its own).
 if [ "${EMU_BASE:-}" != none ]; then
@@ -29,7 +29,7 @@ fi
 rm -rf "$SD/shots"
 rm -f "$SD"/logs/*.log 2>/dev/null
 WOUT=$(cygpath -w "$OUT/$NAME")
-powershell.exe -NoProfile -Command "\$env:DOTNET_ROOT = 'D:\New folder\dotnet10'; \$env:RYUJINX_HOMEBREW_SHADER_CACHE_ID = '0500000050454747'; \$nro = 'D:\New folder\ryu-data\peggle2\sdcard\switch\bejeweled3-nx\feedingfrenzy.nro'; \$p = Start-Process -FilePath 'D:\New folder\Ryubing-src\ryubing\build\Ryujinx.exe' -ArgumentList @('-r', '\"D:\New folder\ryu-data\peggle2\"', ('\"' + \$nro + '\"')) -WindowStyle Minimized -PassThru -RedirectStandardError '$WOUT\\ryu_stderr.txt' -RedirectStandardOutput '$WOUT\\ryu_stdout.txt'; 'pid ' + \$p.Id; try { Wait-Process -Id \$p.Id -Timeout $SECS -ErrorAction Stop; 'exited by itself' } catch { 'stopped after $SECS s' }; Stop-Process -Id \$p.Id -Force -ErrorAction SilentlyContinue; Start-Sleep 2"
+powershell.exe -NoProfile -Command "\$env:DOTNET_ROOT = 'D:\New folder\dotnet10'; \$env:RYUJINX_HOMEBREW_SHADER_CACHE_ID = '0500000050454747'; \$nro = 'D:\New folder\ryu-data\peggle2\sdcard\switch\feedingfrenzy-nx\feedingfrenzy.nro'; \$p = Start-Process -FilePath 'D:\New folder\Ryubing-src\ryubing\build\Ryujinx.exe' -ArgumentList @('-r', '\"D:\New folder\ryu-data\peggle2\"', ('\"' + \$nro + '\"')) -WindowStyle Minimized -PassThru -RedirectStandardError '$WOUT\\ryu_stderr.txt' -RedirectStandardOutput '$WOUT\\ryu_stdout.txt'; 'pid ' + \$p.Id; try { Wait-Process -Id \$p.Id -Timeout $SECS -ErrorAction Stop; 'exited by itself' } catch { 'stopped after $SECS s' }; Stop-Process -Id \$p.Id -Force -ErrorAction SilentlyContinue; Start-Sleep 2"
 [ -d "$SD/shots" ] && cp -r "$SD/shots" "$OUT/$NAME/"
 for d in "$SD/logs" "$SD"; do
   L=$(ls -t "$d"/*.log 2>/dev/null | head -1)

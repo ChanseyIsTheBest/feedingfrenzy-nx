@@ -39,13 +39,20 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 0x82645C84 and 0x82645EB0, 0x82647D64, 0x826480E8. (Peggle 2's were sub_8242E838 and sub_82527248.)
 # bejeweled3-nx (2026-10-22): Bejeweled 3's one, sub_8254E850 (Xbox360AppDriver::DoExit: it prints
 # "Xbox360AppDriver::DoExit(): %d" through sub_824233F0, then `b .` until the console ends the title).
-KNOWN_HALTS = ['sub_8254E850']
+# feedingfrenzy-nx (2026-10-26, the first Switch build): Feeding Frenzy's one, the CRT memcpy sub_822CD480 (XDK 2571's,
+# not Peggle 2's): three `b .` in the guest code (0x822CD644, 0x822CD774, 0x822CD884), each after a copy loop's
+# `bdnz` whose exit is the `bge` before it (the counter never runs out): a trap the CRT left in.
+KNOWN_HALTS = ['sub_822CD480']
 # Vector fused multiply-adds that come from the guest's OWN fused operations (fmadds -> std::fma), two of them paired
 # into one vector instruction by GCC (exact: each lane is the same fused operation). Checked in the disassembly:
 # fcvtl to double, fmla v.2d, fcvtn back, as double(float(std::fma(a, b, c))) twice.
 # bejeweled3-nx (2026-10-22, the 1.0.0 LTO + PGO build): one std::fma of the localized copy n_8298AD60 as a
 # by-element fmla (`fmla v15.2d, v31.2d, v31.d[1]`: its two factors in one register, only lane 0 used), then fcvt to
 # single and back: double(float(std::fma(a, b, c))), the guest's own fmadds.
+# feedingfrenzy-nx (2026-10-26): with the VMX key vmx_fused_madd (futari-nx's, docs/feedingfrenzy-notes.md) the
+# generated code's vmaddfp / vmaddcfp128 / vnmsubfp ARE vector fused multiply-adds (rex::ppc::vmx_madd_ps, one
+# vfmaq_f32): every function whose generated text has the helper, or inlines one that has, is expected to have them
+# (FusedMaddFunctions below).
 KNOWN_VECTOR_FMA = {'sub_8298AD60': 'one std::fma of the localized copy n_8298AD60, lane 0 of a by-element fmla '
                                     '(first LTO + PGO build, 2026-10-22)'}
 # The game's streaming copies for an unaligned source (65 lvx128, one lvsl, 72 vperm128 per kilobyte): the functions
@@ -54,7 +61,30 @@ KNOWN_VECTOR_FMA = {'sub_8298AD60': 'one std::fma of the localized copy n_8298AD
 # sub_8260E164.
 # bejeweled3-nx (2026-10-22): Bejeweled 3's two (72 vperm128 and one lvsl each, the same shape), found by the count
 # of vperm and lvsl in the generated code.
-STREAMING_COPIES = ['sub_825FA9B0', 'sub_825FA154']
+# feedingfrenzy-nx (2026-10-26): Feeding Frenzy has none (XDK 2571's CRT copies without VMX: no function of the
+# generated code has the 72-vperm-and-lvsl shape; the most vperm, 24 and no lvsl, are in sub_822CA4C0).
+STREAMING_COPIES = []
+def FusedMaddFunctions(gen):
+    """The functions of the generated tree with rex::ppc::vmx_madd_ps, and those that inline one of them
+    (REX_INL / inl_sub_X copies and the localized copies' inline definitions)."""
+    import glob
+    import re
+    texts = {}
+    for path in glob.glob(os.path.join(gen, '*_recomp.*.cpp')):
+        src = open(path, encoding='utf-8', errors='replace').read()
+        for m in re.finditer(r'^(?:DEFINE_REX_FUNC\((sub_[0-9A-F]{8})\)|static inline void inl_(sub_[0-9A-F]{8})\()', src, re.M):
+            name = m.group(1) or m.group(2)
+            end = src.find('\n}', m.end())
+            texts[name] = texts.get(name, '') + src[m.end():end if end > 0 else len(src)]
+    direct = {n for n, body in texts.items() if 'vmx_madd_ps' in body}
+    out = set(direct)
+    for _ in range(3):
+        for n, body in texts.items():
+            if n not in out and any(('inl_' + d) in body or ('REX_INL(' + d + ')') in body for d in out):
+                out.add(n)
+    return out
+
+
 DEVKITA64 = next((d + '/devkitA64/bin/' for d in (os.environ.get('DEVKITPRO', ''), 'C:/devkitPro', '/opt/devkitpro')
                   if d and os.path.isdir(d + '/devkitA64/bin')), 'C:/devkitPro/devkitA64/bin/')
 EXE = '.exe' if os.name == 'nt' else ''
@@ -186,7 +216,14 @@ def main():
     if unknown:
         failures.append('branch-to-self outside the known guest halts (a polling loop without its barrier?): '
                         + ', '.join(unknown[:20]))
+    fused = FusedMaddFunctions(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app',
+                                            'generated', 'default'))
     explained = {f: n for f, n in vector_fma.items() if f.replace('__imp__', '') in KNOWN_VECTOR_FMA}
+    vmx_fused = {f: n for f, n in vector_fma.items() if f.replace('__imp__', '') in fused}
+    for f in vmx_fused:
+        del vector_fma[f]
+    print(f'vector fused multiply-adds of vmx_fused_madd (vmx_madd_ps): {sum(vmx_fused.values())} in '
+          f'{len(vmx_fused)} functions ({len(fused)} functions of the generated code use the helper)')
     for f in explained:
         del vector_fma[f]
     print(f'fused multiply-adds in recompiled functions: scalar {scalar_fma} (the guest\'s own), vector '
@@ -231,7 +268,7 @@ def main():
         print(f'-mearly-ra=none: not checked (no {ninja})')
 
     # The two streaming copies compiled alone with the build's own command: every lookup must get its constant.
-    if os.path.exists(ninja) and not a.no_lookups:
+    if os.path.exists(ninja) and not a.no_lookups and STREAMING_COPIES:
         here = os.path.dirname(os.path.abspath(__file__))
         build = os.path.dirname(ninja)
         files = []

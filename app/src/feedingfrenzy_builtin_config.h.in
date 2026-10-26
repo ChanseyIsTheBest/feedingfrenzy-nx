@@ -6,5 +6,5 @@
 //                          none (src/feedingfrenzy_app.h, DefaultConfigFile).
 #pragma once
 
-inline constexpr char kFeedingFrenzyBuiltInConfig[] = R"FEEDINGFRENZYCONFIG(@FEEDINGFRENZY_BUILTIN_CONFIG@)FEEDINGFRENZYCONFIG";
-inline constexpr char kFeedingFrenzyPlayerConfig[] = R"FEEDINGFRENZYCONFIG(@FEEDINGFRENZY_PLAYER_CONFIG@)FEEDINGFRENZYCONFIG";
+inline constexpr char kFeedingFrenzyBuiltInConfig[] = R"FFCONFIG(@FEEDINGFRENZY_BUILTIN_CONFIG@)FFCONFIG";
+inline constexpr char kFeedingFrenzyPlayerConfig[] = R"FFCONFIG(@FEEDINGFRENZY_PLAYER_CONFIG@)FFCONFIG";
