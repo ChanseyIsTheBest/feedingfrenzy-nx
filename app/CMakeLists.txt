@@ -67,6 +67,10 @@ endif()
 
 set(FEEDINGFRENZY_SOURCES
     src/main.cpp
+    # The game menu (2026-11-24; the ultimate base's ports 177-227, blur-nx's, as rr6-nx took them): A+B+X+Y+L+R on
+    # the Switch, F8 on the PC; the release toml's settings.
+    src/game_menu.cpp
+    src/feedingfrenzy_menu_rows.cpp
     # Video recordings of the game image for testing (cvar feedingfrenzy_video_s; tools/make_video.sh makes the MP4).
     src/feedingfrenzy_capture.cpp
     # The game's frame counter for the recorder (hook on D3DDevice_Swap).
@@ -154,6 +158,22 @@ endif()
 # Link the SDK. Stage 3 draws with ReXGlue's Xenos GPU emulation; the native renderer replaces it later.
 rexglue_setup_target(feedingfrenzy GPU_PLUGINS xenos)
 target_include_directories(feedingfrenzy PRIVATE src)
+# blur-nx (2026-11-18, the game menu's font option; the ultimate base's port 178): Dear ImGui's misc/fonts as byte
+# arrays (game_menu_fonts.h). Their licences: NOTICES.
+set(_blur_menu_fonts_dir "${REXSDK_DIR}/thirdparty/imgui/misc/fonts")
+set(_blur_menu_fonts_text "// Made by app/CMakeLists.txt from ${_blur_menu_fonts_dir} (do not edit).\n#pragma once\n")
+foreach(_pair "kMenuFontProggyTiny:ProggyTiny.ttf" "kMenuFontRoboto:Roboto-Medium.ttf" "kMenuFontKarla:Karla-Regular.ttf"
+              "kMenuFontCousine:Cousine-Regular.ttf")
+    string(REPLACE ":" ";" _parts "${_pair}")
+    list(GET _parts 0 _var)
+    list(GET _parts 1 _file)
+    file(READ "${_blur_menu_fonts_dir}/${_file}" _hex HEX)
+    string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," _hex "${_hex}")
+    string(APPEND _blur_menu_fonts_text "alignas(4) static const unsigned char ${_var}[] = {${_hex}};\n")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_blur_menu_fonts_dir}/${_file}")
+endforeach()
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/game_menu_fonts/game_menu_fonts.h" "${_blur_menu_fonts_text}")
+target_include_directories(feedingfrenzy PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/game_menu_fonts")
 
 # 2026-10-19: Renut's Direct3D-level renderer (reNut by masterspike52, as banjo-nx carries it, with its plume deko3d
 # back end): feedingfrenzy_renderer = "renut" at boot. No PM4 ring, no EDRAM model (cmake/feedingfrenzy_renut_gpu.cmake).
@@ -591,7 +611,7 @@ if(REXGLUE_PLATFORM_SWITCH)
     # tools/switch_hot_functions.py and the console profiler's samples. It must come from the same build as the NRO.
     target_link_options(feedingfrenzy PRIVATE "LINKER:-Map=${CMAKE_BINARY_DIR}/feedingfrenzy.map")
     # The homebrew menu's entry: name, author, version and icon (app/icon.jpg, 256x256 JPEG, when the project has one).
-    set(FEEDINGFRENZY_VERSION "1.0.0" CACHE STRING "NRO display version" FORCE)
+    set(FEEDINGFRENZY_VERSION "1.0.1" CACHE STRING "NRO display version" FORCE)
     # feedingfrenzy-nx (2026-10-26): no icon in the repository. Development builds take out/icon_dev.jpg (the game's
     # own title_image.png scaled to 256x256: game data, never committed); out/icon.jpg, when there is one, is the
     # release's.

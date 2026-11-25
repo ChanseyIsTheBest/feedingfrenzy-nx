@@ -2,7 +2,7 @@
 
 <h1 align=center>Feeding Frenzy: Nintendo Switch port</h1>
 
-<p align=center><b>feedingfrenzy-nx 1.0.0</b> · <a href="https://chanseyisthebest.github.io/feedingfrenzy-nx-installer/">web installer</a> · <a href="https://github.com/ChanseyIsTheBest/feedingfrenzy-nx/releases/tag/v1.0.0">release</a></p>
+<p align=center><b>feedingfrenzy-nx 1.0.1</b> · <a href="https://chanseyisthebest.github.io/feedingfrenzy-nx-installer/">web installer</a> · <a href="https://github.com/ChanseyIsTheBest/feedingfrenzy-nx/releases/tag/v1.0.1">release</a></p>
 
 An unofficial native port of the Xbox 360 (Xbox Live Arcade) version of **Feeding Frenzy** (2006) by Sprout Games and
 PopCap Games, made by static recompilation with [ReXGlue](https://github.com/rexglue/rexglue-sdk). No emulator. It is
@@ -30,6 +30,10 @@ Arcade game's content package (`Content/0000000000000000/584107F1/000D0000/F2727
   Switch's own graphics API.
 - The left stick moves your fish; face buttons work by position, as on the Xbox 360 pad (B is the Xbox's A, A is B,
   Y is X, X is Y; + is Start, − is Back).
+- A game menu: hold **A + B + X + Y + L + R** together (**+** closes it) for the settings (language, button layout,
+  Joy-Con, and the menu's own buttons, colour, font and background), the achievements and each player's controls. It
+  saves your choices in `feedingfrenzy.toml`.
+- A smaller install: the installer stores the game files compressed, with the sounds as Opus.
 - No log files are kept; only a crash writes `logs/rex/rex_crash.log`.
 
 `feedingfrenzy.toml`, next to the NRO, holds your options (delete it to get the defaults back):
